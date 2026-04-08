@@ -1,0 +1,12 @@
+{
+  "name": "astromap",
+  "version": "1.0.0",
+  "description": "Night sky observation planner for apartment observers",
+  "scripts": {
+    "build": "bun build src/main.ts --outfile dist/main.js --target browser --format iife",
+    "dev": "bun build src/main.ts --outfile dist/main.js --target browser --format iife --watch"
+  },
+  "dependencies": {
+    "astronomy-engine": "^2.1.19"
+  }
+}
