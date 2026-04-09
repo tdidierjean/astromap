@@ -6,9 +6,11 @@ Tracks the **Moon, Jupiter, Mars, and Saturn** and tells you when each object pa
 
 ## Features
 
-- Tonight's visibility summary per object — next window start/end time and direction
+- Per-object visibility summary — next window start/end time and direction
+- Navigate up to 7 days into the past and 14 days into the future using the night browser in the header
 - Gantt-style timeline from sunset to sunrise showing when each object is observable
 - Altitude curve overlay on the timeline (faint line showing how high each object is)
+- Horizon panorama showing each object's full night arc plotted as azimuth × altitude, with current-position dots for tonight
 - Moon phase display (text description + phase angle)
 - Configurable azimuth viewing windows (e.g. ±45° around North and South)
 - Configurable minimum altitude threshold
@@ -94,7 +96,11 @@ Rendered on a `<canvas>` element. Each row represents one tracked object. Segmen
 - **Very faint colour** — object is above the horizon but outside all viewing windows
 - **Dark/empty** — object is below the horizon
 
-A red dashed "now" line shows the current time.
+A red dashed "now" line shows the current time (tonight's view only).
+
+### Horizon panorama
+
+A second canvas below the timeline plots each object's position spatially: azimuth (0°–360°, N→E→S→W→N) on the X-axis and altitude (0°–90°) on the Y-axis. Configured viewing windows are shaded as vertical bands. A red dashed line marks the minimum altitude threshold. For tonight's view, a filled dot with the object name shows each object's current position on its arc.
 
 ## Project structure
 

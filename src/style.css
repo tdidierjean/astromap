@@ -215,6 +215,12 @@ html, body {
   height: 240px;
 }
 
+.panorama {
+  display: block;
+  width: 100%;
+  height: 220px;
+}
+
 .legend {
   display: flex;
   flex-wrap: wrap;

@@ -367,6 +367,141 @@ function renderTimeline(data: ObjectData[], night: Night, isCurrent = false): vo
   }
 }
 
+// ─── Render: panorama ────────────────────────────────────────────────────────
+
+function renderPanorama(data: ObjectData[], isCurrent = false): void {
+  const canvas = document.getElementById('panorama') as HTMLCanvasElement;
+  const ctx    = canvas.getContext('2d')!;
+  const dpr    = window.devicePixelRatio || 1;
+  const W      = canvas.clientWidth;
+  const H      = canvas.clientHeight;
+  if (W === 0 || H === 0) return;
+
+  canvas.width  = W * dpr;
+  canvas.height = H * dpr;
+  ctx.scale(dpr, dpr);
+
+  const PL = 36, PR = 12, PT = 12, PB = 28;
+  const plotW = W - PL - PR;
+  const plotH = H - PT - PB;
+
+  const toX = (az: number)  => PL + (az / 360) * plotW;
+  const toY = (alt: number) => H - PB - (Math.max(alt, 0) / 90) * plotH;
+
+  // Background
+  ctx.fillStyle = '#161b22';
+  ctx.fillRect(0, 0, W, H);
+
+  // Viewing window shading
+  for (const w of config.windows) {
+    const lo = w.azCenter - w.halfWidth;
+    const hi = w.azCenter + w.halfWidth;
+    ctx.fillStyle = '#ffffff08';
+    if (lo < 0) {
+      // Wraps around 0°/360°: two rectangles
+      const x1 = toX(lo + 360);
+      ctx.fillRect(x1, PT, (W - PR) - x1, plotH);
+      ctx.fillRect(PL, PT, toX(hi) - PL, plotH);
+    } else if (hi > 360) {
+      ctx.fillRect(toX(lo), PT, (W - PR) - toX(lo), plotH);
+      ctx.fillRect(PL, PT, toX(hi - 360) - PL, plotH);
+    } else {
+      ctx.fillRect(toX(lo), PT, toX(hi) - toX(lo), plotH);
+    }
+  }
+
+  // Altitude gridlines + labels
+  const fontSize = Math.min(10, Math.max(8, W / 90));
+  ctx.font      = `${fontSize}px monospace`;
+  ctx.textAlign = 'right';
+  for (const alt of [0, 15, 30, 45, 60, 75, 90]) {
+    const y = toY(alt);
+    ctx.strokeStyle = '#21262d';
+    ctx.lineWidth   = 1;
+    ctx.beginPath();
+    ctx.moveTo(PL, y);
+    ctx.lineTo(W - PR, y);
+    ctx.stroke();
+    ctx.fillStyle = '#4a5568';
+    ctx.fillText(`${alt}°`, PL - 4, y + fontSize / 2);
+  }
+
+  // minAlt threshold line
+  const minAltY = toY(config.minAlt);
+  ctx.strokeStyle = '#ff6b6b44';
+  ctx.lineWidth   = 1;
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath();
+  ctx.moveTo(PL, minAltY);
+  ctx.lineTo(W - PR, minAltY);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Azimuth axis tick marks + labels
+  const compassPoints = [
+    { az: 0,   label: 'N'  }, { az: 45,  label: 'NE' },
+    { az: 90,  label: 'E'  }, { az: 135, label: 'SE' },
+    { az: 180, label: 'S'  }, { az: 225, label: 'SW' },
+    { az: 270, label: 'W'  }, { az: 315, label: 'NW' },
+    { az: 360, label: 'N'  },
+  ];
+  ctx.strokeStyle = '#21262d';
+  ctx.lineWidth   = 1;
+  ctx.fillStyle   = '#4a5568';
+  ctx.font        = `${fontSize}px monospace`;
+  ctx.textAlign   = 'center';
+  for (const pt of compassPoints) {
+    const x = toX(pt.az);
+    ctx.beginPath();
+    ctx.moveTo(x, H - PB);
+    ctx.lineTo(x, H - PB + 3);
+    ctx.stroke();
+    ctx.fillText(pt.label, x, H - PB + 4 + fontSize);
+  }
+
+  // Object paths — one segment at a time for per-segment colour
+  ctx.lineWidth = 2;
+  for (const obj of data) {
+    for (let i = 0; i < obj.samples.length - 1; i++) {
+      const cur  = obj.samples[i];
+      const next = obj.samples[i + 1];
+      if (cur.altitude <= 0 || next.altitude <= 0) continue;
+      // Skip segments that cross the 0°/360° boundary
+      if (Math.abs(next.azimuth - cur.azimuth) > 180) continue;
+
+      ctx.strokeStyle = cur.visible ? obj.color : (obj.color + '40');
+      ctx.beginPath();
+      ctx.moveTo(toX(cur.azimuth),  toY(cur.altitude));
+      ctx.lineTo(toX(next.azimuth), toY(next.altitude));
+      ctx.stroke();
+    }
+  }
+
+  // Current-position dots (tonight only)
+  if (isCurrent) {
+    for (const obj of data) {
+      if (obj.curAlt <= 0) continue;
+      const x = toX(obj.curAz);
+      const y = toY(obj.curAlt);
+
+      ctx.beginPath();
+      ctx.arc(x, y, 6, 0, Math.PI * 2);
+      ctx.fillStyle = '#161b22';
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(x, y, 4.5, 0, Math.PI * 2);
+      ctx.fillStyle = obj.color;
+      ctx.fill();
+
+      ctx.fillStyle  = obj.color;
+      ctx.font       = `${Math.min(11, Math.max(9, W / 80))}px sans-serif`;
+      ctx.textAlign  = 'center';
+      ctx.fillText(obj.name, x, y - 9);
+    }
+  }
+}
+
 // ─── Night navigation ─────────────────────────────────────────────────────────
 
 function updateNightNav(night: Night | null): void {
@@ -465,6 +600,7 @@ function refresh(): void {
     lastData = computeData(night, refTime);
     renderCards(lastData);
     renderTimeline(lastData, night, isCurrent);
+    renderPanorama(lastData, isCurrent);
   }
 }
 
@@ -484,5 +620,8 @@ window.addEventListener('load', () => {
 });
 
 window.addEventListener('resize', () => {
-  if (lastNight && lastData.length) renderTimeline(lastData, lastNight);
+  if (lastNight && lastData.length) {
+    renderTimeline(lastData, lastNight);
+    renderPanorama(lastData, offsetDays === 0);
+  }
 });
