@@ -25,7 +25,9 @@ interface ObjectData {
   color: string;
   dotClass: string;
   body: Astronomy.Body;
+  needsDarkness: boolean;
   samples: Sample[];
+  visSpans: VisSpan[];
   curAz: number;
   curAlt: number;
   curVisible: boolean;
@@ -96,11 +98,14 @@ function computeRefTime(night: Night): Astronomy.AstroTime {
 
 // ─── Objects ─────────────────────────────────────────────────────────────────
 
-const OBJECTS: Array<{ name: string; color: string; dotClass: string; body: Astronomy.Body }> = [
-  { name: 'Moon',    color: '#e0dfca', dotClass: 'dot-moon',    body: Astronomy.Body.Moon    },
-  { name: 'Jupiter', color: '#c8a46e', dotClass: 'dot-jupiter', body: Astronomy.Body.Jupiter },
-  { name: 'Mars',    color: '#e06040', dotClass: 'dot-mars',    body: Astronomy.Body.Mars    },
-  { name: 'Saturn',  color: '#d4c090', dotClass: 'dot-saturn',  body: Astronomy.Body.Saturn  },
+// needsDarkness: whether the object is too faint to make out against a bright sky.
+// The Moon is bright enough to be seen in daylight, so its visibility window
+// shouldn't be clipped to the sunset–sunrise night boundary the way planets are.
+const OBJECTS: Array<{ name: string; color: string; dotClass: string; body: Astronomy.Body; needsDarkness: boolean }> = [
+  { name: 'Moon',    color: '#e0dfca', dotClass: 'dot-moon',    body: Astronomy.Body.Moon,    needsDarkness: false },
+  { name: 'Jupiter', color: '#c8a46e', dotClass: 'dot-jupiter', body: Astronomy.Body.Jupiter, needsDarkness: true  },
+  { name: 'Mars',    color: '#e06040', dotClass: 'dot-mars',    body: Astronomy.Body.Mars,    needsDarkness: true  },
+  { name: 'Saturn',  color: '#d4c090', dotClass: 'dot-saturn',  body: Astronomy.Body.Saturn,  needsDarkness: true  },
 ];
 
 // Inject object dot styles into <head> once
@@ -154,25 +159,42 @@ function findVisSpans(samples: Sample[]): VisSpan[] {
   return spans;
 }
 
+function sampleRange(obj: Astronomy.Body, obs: Astronomy.Observer, fromMs: number, toMs: number, step: number): Sample[] {
+  const samples: Sample[] = [];
+  for (let ms = fromMs; ms <= toMs; ms += step) {
+    const t  = Astronomy.MakeTime(new Date(ms));
+    const hz = getHorizon(obj, t, obs);
+    const cv = checkWindows(hz.azimuth, hz.altitude);
+    samples.push({ time: t, azimuth: hz.azimuth, altitude: hz.altitude, ...cv });
+  }
+  return samples;
+}
+
 function computeData(night: Night, refTime: Astronomy.AstroTime): ObjectData[] {
   const obs = new Astronomy.Observer(config.lat, config.lon, config.elev);
   const startMs = night.start.date.getTime();
   const endMs   = night.end.date.getTime();
   const step    = 15 * 60_000; // 15-min samples
+  const darknessFreeMargin = 24 * 3_600_000; // search a day either side for objects visible in daylight
 
   return OBJECTS.map(obj => {
-    const samples: Sample[] = [];
-    for (let ms = startMs; ms <= endMs; ms += step) {
-      const t  = Astronomy.MakeTime(new Date(ms));
-      const hz = getHorizon(obj.body, t, obs);
-      const cv = checkWindows(hz.azimuth, hz.altitude);
-      samples.push({ time: t, azimuth: hz.azimuth, altitude: hz.altitude, ...cv });
-    }
+    const samples = sampleRange(obj.body, obs, startMs, endMs, step);
+
+    // For objects that don't need darkness (the Moon), find the true visibility
+    // window over a wider range so it isn't artificially clipped to sunset/sunrise —
+    // but only keep the span(s) that actually overlap this night, so an occurrence
+    // from a neighbouring calendar day doesn't show up as a bogus "also" extra.
+    const visSpans = obj.needsDarkness
+      ? findVisSpans(samples)
+      : findVisSpans(sampleRange(obj.body, obs, startMs - darknessFreeMargin, endMs + darknessFreeMargin, step))
+          .filter(s => s.end.getTime() >= startMs && s.start.getTime() <= endMs);
+
     const curHz = getHorizon(obj.body, refTime, obs);
     const curV  = checkWindows(curHz.azimuth, curHz.altitude);
     return {
       ...obj,
       samples,
+      visSpans,
       curAz: curHz.azimuth,
       curAlt: curHz.altitude,
       curVisible: curV.visible,
@@ -207,17 +229,18 @@ function moonPhaseText(deg: number): string {
 
 // ─── Render: cards ────────────────────────────────────────────────────────────
 
-function renderCards(data: ObjectData[], refTime: Astronomy.AstroTime, isLive: boolean): void {
+function renderCards(data: ObjectData[], refTime: Astronomy.AstroTime, isLive: boolean, relativeToRef: boolean): void {
   const phase    = Astronomy.MoonPhase(refTime);
   const phaseStr = moonPhaseText(phase);
   const refMs    = refTime.date.getTime();
 
   document.getElementById('cards')!.innerHTML = data.map(obj => {
-    const spans  = findVisSpans(obj.samples);
+    const spans  = obj.visSpans;
     const hasAny = spans.length > 0;
 
-    // Find the span containing or coming up after the displayed moment.
-    const primary = spans.find(s => s.end.getTime() > refMs);
+    // Live "now" or a manually-picked time: show the span relative to that moment.
+    // Otherwise (browsing a night with no picked time): just show its first window.
+    const primary = relativeToRef ? spans.find(s => s.end.getTime() > refMs) : spans[0];
 
     let windowStr = '—';
     let dirStr    = '';
@@ -633,11 +656,12 @@ function refresh(): void {
   if (night) {
     const refTime = computeRefTime(night);
     const isLive  = offsetDays === 0 && timeOverride === null;
+    const relativeToRef = isLive || timeOverride !== null;
     lastRefTime   = refTime;
     lastIsLive    = isLive;
     syncTimePicker(refTime);
     lastData = computeData(night, refTime);
-    renderCards(lastData, refTime, isLive);
+    renderCards(lastData, refTime, isLive, relativeToRef);
     renderTimeline(lastData, night, refTime, isLive);
     renderPanorama(lastData);
   }
