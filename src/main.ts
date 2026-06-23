@@ -68,6 +68,32 @@ let offsetDays = 0;
 const MIN_OFFSET = -7;
 const MAX_OFFSET = 14;
 
+// ─── Time override ────────────────────────────────────────────────────────────
+
+// When set, freezes the displayed moment to this time-of-day within the
+// selected night instead of following the live clock / night midpoint.
+let timeOverride: { h: number; m: number } | null = null;
+
+function computeRefTime(night: Night): Astronomy.AstroTime {
+  if (!timeOverride) {
+    return offsetDays === 0
+      ? Astronomy.MakeTime(new Date())
+      : Astronomy.MakeTime(new Date((night.start.date.getTime() + night.end.date.getTime()) / 2));
+  }
+  const { h, m } = timeOverride;
+  const startMs = night.start.date.getTime();
+  const endMs   = night.end.date.getTime();
+  const candidates = [0, 1].map(dayOffset => {
+    const d = new Date(night.start.date);
+    d.setDate(d.getDate() + dayOffset);
+    d.setHours(h, m, 0, 0);
+    return d;
+  });
+  const inRange = candidates.find(d => d.getTime() >= startMs && d.getTime() <= endMs);
+  const chosen  = inRange ?? candidates.reduce((a, b) => Math.abs(a.getTime() - startMs) < Math.abs(b.getTime() - startMs) ? a : b);
+  return Astronomy.MakeTime(chosen);
+}
+
 // ─── Objects ─────────────────────────────────────────────────────────────────
 
 const OBJECTS: Array<{ name: string; color: string; dotClass: string; body: Astronomy.Body }> = [
@@ -181,42 +207,33 @@ function moonPhaseText(deg: number): string {
 
 // ─── Render: cards ────────────────────────────────────────────────────────────
 
-function renderCards(data: ObjectData[]): void {
-  const isCurrent = offsetDays === 0;
-  const phaseRefTime = isCurrent
-    ? Astronomy.MakeTime(new Date())
-    : Astronomy.MakeTime(new Date(Date.now() + offsetDays * 86_400_000));
-  const phase    = Astronomy.MoonPhase(phaseRefTime);
+function renderCards(data: ObjectData[], refTime: Astronomy.AstroTime, isLive: boolean): void {
+  const phase    = Astronomy.MoonPhase(refTime);
   const phaseStr = moonPhaseText(phase);
-  const nowMs    = Date.now();
+  const refMs    = refTime.date.getTime();
 
   document.getElementById('cards')!.innerHTML = data.map(obj => {
     const spans  = findVisSpans(obj.samples);
     const hasAny = spans.length > 0;
 
-    // For tonight: find the first span that hasn't ended yet.
-    // For future/past nights: just show the first span (all are equally "upcoming" or past).
-    const primary = isCurrent
-      ? spans.find(s => s.end.getTime() > nowMs)
-      : spans[0];
+    // Find the span containing or coming up after the displayed moment.
+    const primary = spans.find(s => s.end.getTime() > refMs);
 
     let windowStr = '—';
     let dirStr    = '';
     if (primary) {
-      const inProgress = isCurrent && primary.start.getTime() <= nowMs;
+      const inProgress = primary.start.getTime() <= refMs;
       windowStr = inProgress
-        ? `Now &ndash; ${fmtTime(primary.end)}`
+        ? `${isLive ? 'Now' : fmtTime(primary.start)} &ndash; ${fmtTime(primary.end)}`
         : `${fmtTime(primary.start)} &ndash; ${fmtTime(primary.end)}`;
       dirStr = primary.direction;
     }
 
-    // For tonight: show current live position.
-    // For other nights: show position at night midpoint, labelled.
-    const posStr = isCurrent
-      ? (obj.curAlt > -1
-          ? `Alt&nbsp;${obj.curAlt.toFixed(0)}&deg;&nbsp;&middot;&nbsp;Az&nbsp;${obj.curAz.toFixed(0)}&deg;`
-          : 'Below horizon')
-      : `~Midnight:&nbsp;Alt&nbsp;${obj.curAlt.toFixed(0)}&deg;&nbsp;&middot;&nbsp;Az&nbsp;${obj.curAz.toFixed(0)}&deg;`;
+    // Show position at the displayed moment — live "now" or the picked/midpoint time.
+    const posPrefix = isLive ? '' : `At&nbsp;${fmtTime(refTime.date)}:&nbsp;`;
+    const posStr = obj.curAlt > -1
+      ? `${posPrefix}Alt&nbsp;${obj.curAlt.toFixed(0)}&deg;&nbsp;&middot;&nbsp;Az&nbsp;${obj.curAz.toFixed(0)}&deg;`
+      : `${posPrefix}Below horizon`;
 
     // Show remaining spans after the primary one
     const rest = primary ? spans.filter(s => s !== primary) : spans.slice(1);
@@ -246,7 +263,7 @@ function renderCards(data: ObjectData[]): void {
 
 // ─── Render: timeline canvas ──────────────────────────────────────────────────
 
-function renderTimeline(data: ObjectData[], night: Night, isCurrent = false): void {
+function renderTimeline(data: ObjectData[], night: Night, refTime: Astronomy.AstroTime, isLive: boolean): void {
   const canvas = document.getElementById('timeline') as HTMLCanvasElement;
   const ctx    = canvas.getContext('2d')!;
   const dpr    = window.devicePixelRatio || 1;
@@ -347,10 +364,10 @@ function renderTimeline(data: ObjectData[], night: Night, isCurrent = false): vo
     }
   });
 
-  // "Now" marker — only on tonight's view
-  const nowMs = Date.now();
-  if (isCurrent && nowMs >= t0 && nowMs <= t1) {
-    const x = toX(nowMs);
+  // Marker for the displayed moment — live "now" or the picked time
+  const refMs = refTime.date.getTime();
+  if (refMs >= t0 && refMs <= t1) {
+    const x = toX(refMs);
     ctx.strokeStyle = '#ff6b6b';
     ctx.lineWidth   = 1.5;
     ctx.setLineDash([3, 3]);
@@ -363,13 +380,13 @@ function renderTimeline(data: ObjectData[], night: Night, isCurrent = false): vo
     ctx.fillStyle = '#ff6b6b';
     ctx.font      = '10px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText('now', x, PT - 8);
+    ctx.fillText(isLive ? 'now' : fmtTime(refTime.date), x, PT - 8);
   }
 }
 
 // ─── Render: panorama ────────────────────────────────────────────────────────
 
-function renderPanorama(data: ObjectData[], isCurrent = false): void {
+function renderPanorama(data: ObjectData[]): void {
   const canvas = document.getElementById('panorama') as HTMLCanvasElement;
   const ctx    = canvas.getContext('2d')!;
   const dpr    = window.devicePixelRatio || 1;
@@ -477,28 +494,26 @@ function renderPanorama(data: ObjectData[], isCurrent = false): void {
     }
   }
 
-  // Current-position dots (tonight only)
-  if (isCurrent) {
-    for (const obj of data) {
-      if (obj.curAlt <= 0) continue;
-      const x = toX(obj.curAz);
-      const y = toY(obj.curAlt);
+  // Position dots for the displayed moment (live "now" or the picked time)
+  for (const obj of data) {
+    if (obj.curAlt <= 0) continue;
+    const x = toX(obj.curAz);
+    const y = toY(obj.curAlt);
 
-      ctx.beginPath();
-      ctx.arc(x, y, 6, 0, Math.PI * 2);
-      ctx.fillStyle = '#161b22';
-      ctx.fill();
+    ctx.beginPath();
+    ctx.arc(x, y, 6, 0, Math.PI * 2);
+    ctx.fillStyle = '#161b22';
+    ctx.fill();
 
-      ctx.beginPath();
-      ctx.arc(x, y, 4.5, 0, Math.PI * 2);
-      ctx.fillStyle = obj.color;
-      ctx.fill();
+    ctx.beginPath();
+    ctx.arc(x, y, 4.5, 0, Math.PI * 2);
+    ctx.fillStyle = obj.color;
+    ctx.fill();
 
-      ctx.fillStyle  = obj.color;
-      ctx.font       = `${Math.min(11, Math.max(9, W / 80))}px sans-serif`;
-      ctx.textAlign  = 'center';
-      ctx.fillText(obj.name, x, y - 9);
-    }
+    ctx.fillStyle  = obj.color;
+    ctx.font       = `${Math.min(11, Math.max(9, W / 80))}px sans-serif`;
+    ctx.textAlign  = 'center';
+    ctx.fillText(obj.name, x, y - 9);
   }
 }
 
@@ -521,6 +536,21 @@ function setupNightNav(refresh: () => void): void {
   });
   document.getElementById('nav-next')!.addEventListener('click', () => {
     if (offsetDays < MAX_OFFSET) { offsetDays++; refresh(); }
+  });
+}
+
+function setupTimePicker(refresh: () => void): void {
+  const input = document.getElementById('time-picker') as HTMLInputElement;
+  input.addEventListener('input', () => {
+    const [h, m] = input.value.split(':').map(Number);
+    if (Number.isNaN(h) || Number.isNaN(m)) return;
+    timeOverride = { h, m };
+    refresh();
+  });
+  document.getElementById('time-now')!.addEventListener('click', () => {
+    timeOverride = null;
+    offsetDays   = 0;
+    refresh();
   });
 }
 
@@ -580,8 +610,17 @@ function setupSettings(refresh: () => void): void {
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
-let lastNight: Night | null = null;
-let lastData:  ObjectData[] = [];
+let lastNight:   Night | null = null;
+let lastData:    ObjectData[] = [];
+let lastRefTime: Astronomy.AstroTime | null = null;
+let lastIsLive   = false;
+
+function syncTimePicker(refTime: Astronomy.AstroTime): void {
+  const input = document.getElementById('time-picker') as HTMLInputElement;
+  if (document.activeElement === input) return; // don't fight the user mid-edit
+  const d = refTime.date;
+  input.value = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
 
 function refresh(): void {
   const obs      = new Astronomy.Observer(config.lat, config.lon, config.elev);
@@ -592,15 +631,15 @@ function refresh(): void {
   updateNightNav(night);
 
   if (night) {
-    const isCurrent = offsetDays === 0;
-    // For tonight use the actual current time; for other nights use the night's midpoint
-    const refTime = isCurrent
-      ? Astronomy.MakeTime(new Date())
-      : Astronomy.MakeTime(new Date((night.start.date.getTime() + night.end.date.getTime()) / 2));
+    const refTime = computeRefTime(night);
+    const isLive  = offsetDays === 0 && timeOverride === null;
+    lastRefTime   = refTime;
+    lastIsLive    = isLive;
+    syncTimePicker(refTime);
     lastData = computeData(night, refTime);
-    renderCards(lastData);
-    renderTimeline(lastData, night, isCurrent);
-    renderPanorama(lastData, isCurrent);
+    renderCards(lastData, refTime, isLive);
+    renderTimeline(lastData, night, refTime, isLive);
+    renderPanorama(lastData);
   }
 }
 
@@ -613,6 +652,7 @@ function updateClock(): void {
 window.addEventListener('load', () => {
   setupSettings(refresh);
   setupNightNav(refresh);
+  setupTimePicker(refresh);
   refresh();
   updateClock();
   setInterval(refresh,      60_000);
@@ -620,8 +660,8 @@ window.addEventListener('load', () => {
 });
 
 window.addEventListener('resize', () => {
-  if (lastNight && lastData.length) {
-    renderTimeline(lastData, lastNight);
-    renderPanorama(lastData, offsetDays === 0);
+  if (lastNight && lastData.length && lastRefTime) {
+    renderTimeline(lastData, lastNight, lastRefTime, lastIsLive);
+    renderPanorama(lastData);
   }
 });
