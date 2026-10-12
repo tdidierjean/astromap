@@ -78,7 +78,7 @@ export class Camera {
 export function altForHorizon(fov: number, W: number, H: number, frac = 0.92): number {
   const y = (frac - 0.5) * H;
   const t = y * 2 * Math.tan(fov * D2R / 4) / W; // tan(alt/2)
-  return clamp(2 * Math.atan(t) / D2R, 0, 75);
+  return clamp(2 * Math.atan(t) / D2R, 0, ALT_MAX);
 }
 
 /**
@@ -97,4 +97,13 @@ export function defaultFraming(W: number, H: number, hFrac = 0.93, topAlt = 74):
   const S = (hFrac - 0.5) * H / (2 * Math.tan(alt * D2R / 2));
   const fov = clamp(4 * Math.atan((W / 2) / (2 * S)) / D2R, 50, FOV_MAX);
   return { alt: altForHorizon(fov, W, H, hFrac), fov };
+}
+
+/** Lowest allowed horizon position (fraction of canvas height from the top) at the view-centre azimuth. */
+export const HORIZON_MIN_FRAC = 0.89;
+
+/** Widest fov for which the horizon can still sit at `frac` even with the centre at the zenith. */
+export function maxFovForHorizon(W: number, H: number, frac = HORIZON_MIN_FRAC): number {
+  const t = W / (2 * (frac - 0.5) * H); // tan(fov/4)
+  return clamp(4 * Math.atan(t) / D2R, FOV_MIN, FOV_MAX);
 }

@@ -8,7 +8,7 @@ import {
   findVisSpans, sampleFixedStar, type Night, type ObjectData, type Sample,
 } from '../astro';
 import { fmtTime, moonPhaseText } from '../format';
-import { Camera, clamp, altForHorizon, defaultFraming, FOV_MIN, FOV_MAX, ALT_MIN, ALT_MAX, type View } from './camera';
+import { Camera, clamp, altForHorizon, defaultFraming, maxFovForHorizon, HORIZON_MIN_FRAC, FOV_MIN, FOV_MAX, ALT_MIN, ALT_MAX, type View } from './camera';
 import { skyColors, rgb, twilightName, twilightLimit, starColor } from './palette';
 
 const D2R = Math.PI / 180;
@@ -99,14 +99,32 @@ export class SkyView {
 
   setView(v: Partial<View>): void {
     this.view = { ...this.view, ...v };
-    this.view.fov = clamp(this.view.fov, FOV_MIN, FOV_MAX);
-    // Users don't need to look at the ground: keep the horizon at/below 60% of the canvas height
-    // and the view centre at >= 5 deg altitude.
+    // Users don't need to look at the ground: keep the horizon (at the view-centre azimuth) at or below
+    // 89% of the canvas height. Zooming out therefore raises the centre altitude automatically, and the
+    // fov is capped where even a zenith-centred view could not keep the horizon that low.
     const { W, H } = this.cam;
-    const altMin = W > 1 ? Math.max(5, altForHorizon(this.view.fov, W, H, 0.6)) : 5;
+    const fovMax = W > 1 ? maxFovForHorizon(W, H) : FOV_MAX;
+    this.view.fov = clamp(this.view.fov, FOV_MIN, fovMax);
+    const altMin = W > 1 ? Math.max(5, altForHorizon(this.view.fov, W, H, HORIZON_MIN_FRAC)) : 5;
     this.view.alt = clamp(this.view.alt, altMin, ALT_MAX);
     this.view.az = ((this.view.az % 360) + 360) % 360;
     this.requestRender();
+  }
+
+  /** Set the fov so that the sky direction `anchor` stays under screen point (mx, my); then clamp. */
+  private zoomAbout(fov: number, anchor: [number, number, number], mx: number, my: number): void {
+    const { cam } = this;
+    const a0 = enuToAzAlt(anchor[0], anchor[1], anchor[2]);
+    let az = this.view.az, alt = this.view.alt;
+    fov = clamp(fov, FOV_MIN, cam.W > 1 ? maxFovForHorizon(cam.W, cam.H) : FOV_MAX);
+    for (let i = 0; i < 6; i++) {
+      cam.set({ az, alt: clamp(alt, -89, 89.9), fov }, cam.W, cam.H);
+      const [e, n, u] = cam.unproject(mx, my);
+      const a = enuToAzAlt(e, n, u);
+      az += ((a0.az - a.az + 540) % 360) - 180;
+      alt += a0.alt - a.alt;
+    }
+    this.setView({ az, alt, fov });
   }
 
   resetView(): void {
@@ -688,11 +706,20 @@ export class SkyView {
       if (!cam.project(e, n, u, tmp)) return;
       const x = tmp[0];
       if (side < 0 ? x > 6 : x < cam.W - 6) return; // limit is on-screen
-      const y = clamp(tmp[1], cam.H * 0.72, cam.H * 0.88);
       const txt = side < 0 ? `\u2039 ${Math.round(az) % 360}\u00b0` : `${Math.round(az) % 360}\u00b0 \u203a`;
       ctx.font = '600 12px -apple-system, "Segoe UI", sans-serif';
       const w = ctx.measureText(txt).width + 14, h = 24;
-      const x0 = side < 0 ? 4 : cam.W - 4 - w, y0 = y - h / 2;
+      const x0 = side < 0 ? 4 : cam.W - 4 - w;
+      // sit just above the horizon line at this screen edge (horizon = circle with centre cy, radius R)
+      const S2 = 2 * cam.S, zy = cam.u[2], zz = cam.f[2];
+      let yh = cam.H * 0.85;
+      if (Math.abs(zz) > 1e-4) {
+        const cx = cam.W / 2, cy = cam.H / 2 - S2 * zy / zz, R = S2 / Math.abs(zz);
+        const dx = (side < 0 ? 4 : cam.W - 4) - cx;
+        if (Math.abs(dx) < R) yh = cy + (zz > 0 ? 1 : -1) * Math.sqrt(R * R - dx * dx);
+      }
+      const y = clamp(yh - h / 2 - 6, 52 + h / 2, cam.H - h / 2 - 6);
+      const y0 = y - h / 2;
       ctx.fillStyle = 'rgba(20,28,44,0.72)';
       ctx.beginPath(); ctx.roundRect(x0, y0, w, h, 12); ctx.fill();
       ctx.strokeStyle = 'rgba(110,170,255,0.35)'; ctx.lineWidth = 1; ctx.stroke();
@@ -740,6 +767,8 @@ export class SkyView {
     const pts = new Map<number, { x: number; y: number }>();
     let moved = false, downT = 0, downX = 0, downY = 0;
     let pinchD0 = 0, pinchFov0 = 100;
+    let anchor: [number, number, number] = [0, 1, 0];
+    const mid = () => { const [a, b] = [...pts.values()]; return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; };
     let lastTapT = 0, lastTapX = 0, lastTapY = 0;
     const rel = (e: PointerEvent) => { const r = c.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
     const dist = () => { const [a, b] = [...pts.values()]; return Math.hypot(a.x - b.x, a.y - b.y) || 1; };
@@ -748,7 +777,7 @@ export class SkyView {
       c.setPointerCapture(e.pointerId);
       pts.set(e.pointerId, rel(e));
       if (pts.size === 1) { moved = false; downT = performance.now(); ({ x: downX, y: downY } = rel(e)); }
-      else if (pts.size === 2) { moved = true; pinchD0 = dist(); pinchFov0 = this.view.fov; }
+      else if (pts.size === 2) { moved = true; pinchD0 = dist(); pinchFov0 = this.view.fov; const m = mid(); anchor = this.cam.unproject(m.x, m.y); }
       e.preventDefault();
     });
 
@@ -765,7 +794,8 @@ export class SkyView {
           this.setView({ az: this.view.az - (cur.x - prev.x) * k / ca, alt: this.view.alt + (cur.y - prev.y) * k });
         }
       } else if (pts.size === 2) {
-        this.setView({ fov: pinchFov0 * pinchD0 / dist() });
+        const m = mid();
+        this.zoomAbout(pinchFov0 * pinchD0 / dist(), anchor, m.x, m.y);
       }
     });
 
@@ -794,7 +824,8 @@ export class SkyView {
 
     c.addEventListener('wheel', e => {
       e.preventDefault();
-      this.setView({ fov: this.view.fov * Math.exp(e.deltaY * 0.0012) });
+      const r = c.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
+      this.zoomAbout(this.view.fov * Math.exp(e.deltaY * 0.0012), this.cam.unproject(mx, my), mx, my);
     }, { passive: false });
     c.addEventListener('contextmenu', e => e.preventDefault());
   }

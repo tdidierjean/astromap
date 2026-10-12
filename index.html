@@ -38,8 +38,14 @@
         <div id="window-pills" class="pills"></div>
         <div class="sky-tools">
           <button id="btn-grid" class="tool" title="Toggle alt/az grid" aria-label="Toggle grid">#</button>
+          <button id="btn-mag" class="tool" title="Limiting magnitude" aria-label="Limiting magnitude" aria-expanded="false">&#9733;</button>
           <button id="btn-reset" class="tool" title="Reset view to window" aria-label="Reset view">&#8982;</button>
         </div>
+      </div>
+      <div id="mag-pop" class="mag-pop hidden">
+        <label for="lim-mag">Limiting mag</label>
+        <input id="lim-mag" class="settings-range" type="range" min="2" max="6" step="0.5">
+        <span id="lim-mag-val" class="settings-val">4.0</span>
       </div>
       <div id="sky-info" class="sky-info hidden"></div>
     </div>
@@ -53,11 +59,6 @@
       </div>
       <input id="scrub" class="scrub" type="range" min="0" max="600" step="1" value="0" aria-label="Time of night">
       <div class="scrub-ends"><span id="scrub-start"></span><span id="scrub-end"></span></div>
-      <div class="mag-row">
-        <label for="lim-mag">Limiting mag</label>
-        <input id="lim-mag" class="settings-range" type="range" min="2" max="6" step="0.5">
-        <span id="lim-mag-val" class="settings-val">4.0</span>
-      </div>
     </div>
   </section>
 

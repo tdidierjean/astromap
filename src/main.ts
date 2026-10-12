@@ -140,6 +140,12 @@ function setupSkyControls(): void {
   });
 
   $('btn-reset').addEventListener('click', () => sky.resetView());
+  const magBtn = $('btn-mag'), magPop = $('mag-pop');
+  magBtn.addEventListener('click', () => {
+    const open = magPop.classList.toggle('hidden') === false;
+    magBtn.classList.toggle('active', open);
+    magBtn.setAttribute('aria-expanded', String(open));
+  });
 
   const grid = $('btn-grid');
   const syncGrid = () => grid.classList.toggle('active', config.showGrid);
