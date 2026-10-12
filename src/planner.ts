@@ -1,6 +1,7 @@
 // Planner UI: visibility cards, Gantt timeline, az/alt panorama, night navigation, settings.
 import * as Astronomy from 'astronomy-engine';
-import { config, saveConfig } from './config';
+import { config, saveConfig, DEFAULT_CONFIG, type LeafMode } from './config';
+import { leafOn, sampleProfile } from './horizon';
 import { fmtTime, nightLabel, moonPhaseText } from './format';
 import { findVisSpans, type ObjectData, type Night } from './astro';
 import { state, MIN_OFFSET, MAX_OFFSET } from './state';
@@ -225,7 +226,7 @@ export function setupTimelinePick(onPick: (ms: number) => void): void {
 
 // ─── Render: panorama ────────────────────────────────────────────────────────
 
-export function renderPanorama(data: ObjectData[], isCurrent = false): void {
+export function renderPanorama(data: ObjectData[], isCurrent = false, refDate: Date = new Date()): void {
   const canvas = document.getElementById('panorama') as HTMLCanvasElement;
   const ctx    = canvas.getContext('2d')!;
   const dpr    = window.devicePixelRatio || 1;
@@ -253,7 +254,9 @@ export function renderPanorama(data: ObjectData[], isCurrent = false): void {
     const lo = w.azCenter - w.halfWidth;
     const hi = w.azCenter + w.halfWidth;
     ctx.fillStyle = '#ffffff08';
-    if (lo < 0) {
+    if (w.profile) {
+      // handled below (profile silhouette)
+    } else if (lo < 0) {
       // Wraps around 0°/360°: two rectangles
       const x1 = toX(lo + 360);
       ctx.fillRect(x1, PT, (W - PR) - x1, plotH);
@@ -264,6 +267,46 @@ export function renderPanorama(data: ObjectData[], isCurrent = false): void {
     } else {
       ctx.fillRect(toX(lo), PT, toX(hi) - toX(lo), plotH);
     }
+  }
+
+  // Horizon profiles: open sky region shaded, obstructions filled by kind
+  const leaf = leafOn(refDate);
+  const KIND_FILL: Record<string, string> = {
+    building: '#2a303a', tree: '#1f4a2c', conifer: '#17402a', estimated: '#3a4350',
+  };
+  for (const w of config.windows) {
+    const p = w.profile;
+    if (!p) continue;
+    ctx.fillStyle = '#ffffff0c';
+    ctx.fillRect(toX(p.azMin), PT, toX(p.azMax) - toX(p.azMin), plotH);
+    const sm = sampleProfile(p, leaf, 1);
+    for (let i = 0; i < sm.length - 1; i++) {
+      const a = sm[i], b = sm[i + 1];
+      const x0 = toX(a.az), x1 = toX(b.az) + 0.5;
+      ctx.fillStyle = KIND_FILL[a.kind];
+      ctx.globalAlpha = a.kind === 'estimated' ? 0.6 : 1;
+      const y0 = toY(a.top), y1 = toY(b.top);
+      ctx.beginPath();
+      ctx.moveTo(x0, toY(0)); ctx.lineTo(x0, y0); ctx.lineTo(x1, y1); ctx.lineTo(x1, toY(0));
+      ctx.closePath(); ctx.fill();
+      ctx.globalAlpha = 1;
+      if (!leaf && a.kind === 'tree') {
+        ctx.fillStyle = '#1f4a2c40';
+        ctx.fillRect(x0, toY(a.leafTop), x1 - x0, toY(a.top) - toY(a.leafTop));
+      }
+    }
+    // dashed top edge where the profile is estimated
+    ctx.strokeStyle = '#9aa7bc'; ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
+    ctx.beginPath(); let pen = false;
+    for (const s of sm) {
+      if (s.kind === 'estimated') { pen ? ctx.lineTo(toX(s.az), toY(s.top)) : ctx.moveTo(toX(s.az), toY(s.top)); pen = true; }
+      else pen = false;
+    }
+    ctx.stroke(); ctx.setLineDash([]);
+    // walls
+    ctx.fillStyle = '#0b0d11';
+    ctx.fillRect(toX(p.azMin) - 2, PT, 2, plotH);
+    ctx.fillRect(toX(p.azMax), PT, 2, plotH);
   }
 
   // Altitude gridlines + labels
@@ -282,15 +325,20 @@ export function renderPanorama(data: ObjectData[], isCurrent = false): void {
     ctx.fillText(`${alt}°`, PL - 4, y + fontSize / 2);
   }
 
-  // minAlt threshold line
+  // minAlt threshold line (windows without a measured profile)
   const minAltY = toY(config.minAlt);
   ctx.strokeStyle = '#ff6b6b44';
   ctx.lineWidth   = 1;
   ctx.setLineDash([4, 4]);
-  ctx.beginPath();
-  ctx.moveTo(PL, minAltY);
-  ctx.lineTo(W - PR, minAltY);
-  ctx.stroke();
+  for (const w of config.windows) {
+    if (w.profile) continue;
+    const lo = ((w.azCenter - w.halfWidth) % 360 + 360) % 360;
+    const spans: Array<[number, number]> = lo + 2 * w.halfWidth > 360
+      ? [[lo, 360], [0, lo + 2 * w.halfWidth - 360]] : [[lo, lo + 2 * w.halfWidth]];
+    for (const [x0, x1] of spans) {
+      ctx.beginPath(); ctx.moveTo(toX(x0), minAltY); ctx.lineTo(toX(x1), minAltY); ctx.stroke();
+    }
+  }
   ctx.setLineDash([]);
 
   // Azimuth axis tick marks + labels
@@ -383,14 +431,26 @@ export function setupNightNav(refresh: () => void): void {
 // ─── Settings ─────────────────────────────────────────────────────────────────
 
 export function syncUI(): void {
-  (document.getElementById('n-half')  as HTMLInputElement).value = String(config.windows[0].halfWidth);
-  (document.getElementById('s-half')  as HTMLInputElement).value = String(config.windows[1].halfWidth);
-  (document.getElementById('min-alt') as HTMLInputElement).value = String(config.minAlt);
-  (document.getElementById('lat')     as HTMLInputElement).value = String(config.lat);
-  (document.getElementById('lon')     as HTMLInputElement).value = String(config.lon);
+  const set = (id: string, v: string) => ((document.getElementById(id) as HTMLInputElement).value = v);
+  set('n-half', String(config.windows[0].halfWidth));
+  set('s-half', String(config.windows[1].halfWidth));
+  set('min-alt', String(config.minAlt));
+  set('lat', String(config.lat));
+  set('lon', String(config.lon));
+  set('leaf-mode', config.leaf);
   updateWindowHint('n', config.windows[0].halfWidth);
   updateWindowHint('s', config.windows[1].halfWidth);
   document.getElementById('min-alt-val')!.textContent = `${config.minAlt}\u00b0`;
+  // South window: measured profile vs simple window
+  const sw = config.windows[1];
+  const prof = sw.profile;
+  document.getElementById('s-profile')!.classList.toggle('hidden', !prof);
+  document.getElementById('s-simple')!.classList.toggle('hidden', !!prof);
+  document.getElementById('s-restore-profile')!.classList.toggle('hidden', !sw.profileOptOut || !!prof);
+  if (prof) {
+    document.getElementById('s-profile-text')!.textContent =
+      `Horizon: ${prof.source} (${prof.azMin}\u00b0\u2013${prof.azMax}\u00b0)`;
+  }
 }
 
 function updateWindowHint(side: 'n' | 's', half: number): void {
@@ -411,6 +471,21 @@ export function setupSettings(refresh: () => void): void {
       refresh();
     });
   };
+
+  document.getElementById('leaf-mode')!.addEventListener('change', e => {
+    config.leaf = (e.target as HTMLSelectElement).value as LeafMode;
+    saveConfig(); refresh();
+  });
+  document.getElementById('s-reset-profile')!.addEventListener('click', () => {
+    const w = config.windows[1];
+    w.profile = undefined; w.profileOptOut = true; w.azCenter = 180; w.halfWidth = 45;
+    saveConfig(); syncUI(); refresh();
+  });
+  document.getElementById('s-restore-profile')!.addEventListener('click', () => {
+    const d = DEFAULT_CONFIG.windows[1], w = config.windows[1];
+    w.profile = structuredClone(d.profile); w.profileOptOut = false; w.azCenter = d.azCenter; w.halfWidth = d.halfWidth;
+    saveConfig(); syncUI(); refresh();
+  });
 
   on('n-half',  v => { config.windows[0].halfWidth = v; updateWindowHint('n', v); });
   on('s-half',  v => { config.windows[1].halfWidth = v; updateWindowHint('s', v); });

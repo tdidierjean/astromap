@@ -114,12 +114,29 @@
           </div>
 
           <div class="settings-group">
-            <div class="settings-label">South window (center 180&deg;)</div>
-            <div class="settings-row">
-              <input id="s-half" type="range" min="5" max="90" step="5" class="settings-range">
-              <span id="s-half-val" class="settings-val">&#177;45&deg;</span>
+            <div class="settings-label">South window</div>
+            <div id="s-profile">
+              <div class="settings-hint" id="s-profile-text">Horizon: measured from photos</div>
+              <button id="s-reset-profile" class="settings-btn" type="button">Reset to simple window</button>
             </div>
-            <div class="settings-hint" id="s-hint">135&deg; &ndash; 225&deg;</div>
+            <div id="s-simple">
+              <div class="settings-row">
+                <input id="s-half" type="range" min="5" max="90" step="5" class="settings-range">
+                <span id="s-half-val" class="settings-val">&#177;45&deg;</span>
+              </div>
+              <div class="settings-hint" id="s-hint">135&deg; &ndash; 225&deg;</div>
+              <button id="s-restore-profile" class="settings-btn hidden" type="button">Restore measured horizon</button>
+            </div>
+          </div>
+
+          <div class="settings-group">
+            <div class="settings-label">Deciduous trees</div>
+            <select id="leaf-mode" class="settings-input">
+              <option value="auto">Auto (in leaf 25 Apr &ndash; 10 Nov)</option>
+              <option value="leaf">In leaf</option>
+              <option value="bare">Bare</option>
+            </select>
+            <div class="settings-hint">Leafy trees block the view; bare trees only hide the roofs behind them</div>
           </div>
 
           <div class="settings-group">
@@ -128,7 +145,7 @@
               <input id="min-alt" type="range" min="0" max="45" step="5" class="settings-range">
               <span id="min-alt-val" class="settings-val">10&deg;</span>
             </div>
-            <div class="settings-hint">Objects below this altitude are ignored</div>
+            <div class="settings-hint">Objects below this altitude are ignored (windows without a measured horizon)</div>
           </div>
 
         </div>

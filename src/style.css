@@ -436,3 +436,10 @@ body[data-tab="sky"] .header, body[data-tab="sky"] .tabs { flex: none; }
   .header__title { font-size: 1.1rem; }
   .main { padding: 14px 12px 32px; }
 }
+
+.settings-btn {
+  margin-top: 6px; padding: 6px 10px; font-size: 0.8rem; color: var(--text);
+  background: var(--card, #161b22); border: 1px solid var(--border, #30363d); border-radius: 6px; cursor: pointer;
+}
+.settings-btn:hover { border-color: var(--muted); }
+#leaf-mode { width: 100%; }

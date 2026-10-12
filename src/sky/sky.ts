@@ -1,10 +1,11 @@
 // Sky view: canvas renderer, pan/zoom interaction, tap-for-info.
 import * as Astronomy from 'astronomy-engine';
-import { config } from '../config';
+import { config, type ViewWindow } from '../config';
+import { visibility, isVisible, leafOn, sampleProfile, type ProfileSample } from '../horizon';
 import { catalog } from '../catalog';
 import {
   OBJECTS, observer, getHorizon, bodyMagnitude, eqjToEnu, enuToAzAlt, azAltToEnu,
-  inWindow, findVisSpans, sampleFixedStar, type Night, type ObjectData, type Sample,
+  findVisSpans, sampleFixedStar, type Night, type ObjectData, type Sample,
 } from '../astro';
 import { fmtTime, moonPhaseText } from '../format';
 import { Camera, clamp, altForHorizon, FOV_MIN, FOV_MAX, ALT_MIN, ALT_MAX, type View } from './camera';
@@ -107,7 +108,7 @@ export class SkyView {
     const w = config.windows[this.winIdx];
     if (!w) return;
     const W = this.cam.W, H = this.cam.H;
-    const fov = clamp(w.halfWidth * 2 * 1.1, 70, 120);
+    const fov = clamp(w.halfWidth * 2 * 1.08, 70, 150);
     this.view = { az: w.azCenter, alt: W > 1 ? altForHorizon(fov, W, H) : 55, fov };
     this.needsCamReset = false;
     this.requestRender();
@@ -203,6 +204,7 @@ export class SkyView {
     this.drawBodies(zf);
     if (win) this.drawWindowMask(win);
     this.drawGround();
+    if (win?.profile) this.drawProfile(win);
     this.drawHorizon();
     this.drawLabels(lim, win);
     this.drawSelection();
@@ -391,25 +393,27 @@ export class SkyView {
     ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832); ctx.stroke();
   }
 
-  /** Dim everything outside the selected window's azimuth range / below minAlt. */
-  private drawWindowMask(win: { azCenter: number; halfWidth: number }): void {
-    if (win.halfWidth >= 180 && config.minAlt <= 0) return;
+  /** Dim everything outside the selected window's azimuth range / below minAlt (or outside a profile's walls). */
+  private drawWindowMask(win: ViewWindow): void {
+    const prof = win.profile;
+    if (!prof && win.halfWidth >= 180 && config.minAlt <= 0) return;
     const { ctx, cam, tmp } = this;
+    const floor = prof ? 0 : config.minAlt;
     const pts: Array<[number, number]> = [];
     const add = (az: number, alt: number) => {
       const [e, n, u] = azAltToEnu(az, alt);
       cam.projectClamped(e, n, u, tmp);
       pts.push([tmp[0], tmp[1]]);
     };
-    const lo = win.azCenter - win.halfWidth, hi = win.azCenter + win.halfWidth;
-    const full = win.halfWidth >= 180;
+    const lo = prof ? prof.azMin : win.azCenter - win.halfWidth, hi = prof ? prof.azMax : win.azCenter + win.halfWidth;
+    const full = !prof && win.halfWidth >= 180;
     const a0 = full ? 0 : lo, a1 = full ? 360 : hi;
-    for (let az = a0; az < a1; az += 3) add(az, config.minAlt);
-    add(a1, config.minAlt);
+    for (let az = a0; az < a1; az += 3) add(az, floor);
+    add(a1, floor);
     if (!full) {
-      for (let alt = config.minAlt + 5; alt < 90; alt += 5) add(hi, alt);
+      for (let alt = floor + 5; alt < 90; alt += 5) add(hi, alt);
       add(hi, 90);
-      for (let alt = 85; alt > config.minAlt; alt -= 5) add(lo, alt);
+      for (let alt = 85; alt > floor; alt -= 5) add(lo, alt);
     }
     const trace = () => { pts.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.closePath(); };
 
@@ -419,10 +423,112 @@ export class SkyView {
     ctx.fillStyle = 'rgba(5,8,14,0.62)';
     ctx.fill('evenodd');
 
+    if (prof) return; // the profile drawing outlines the region itself
+
     // Outline of the visible region
     ctx.beginPath(); trace();
     ctx.strokeStyle = 'rgba(110,170,255,0.30)'; ctx.lineWidth = 1; ctx.setLineDash([5, 4]);
     ctx.stroke(); ctx.setLineDash([]);
+  }
+
+  /** Path of an az/alt polyline (projected). */
+  private pathPts(list: Array<[number, number]>, move: boolean): void {
+    const { ctx, cam, tmp } = this;
+    list.forEach(([az, alt], i) => {
+      const [e, n, u] = azAltToEnu(az, alt);
+      cam.projectClamped(e, n, u, tmp);
+      if (i === 0 && move) ctx.moveTo(tmp[0], tmp[1]); else ctx.lineTo(tmp[0], tmp[1]);
+    });
+  }
+
+  /** Walls and obstruction silhouette of a window with a measured horizon profile. */
+  private drawProfile(win: ViewWindow): void {
+    const prof = win.profile!;
+    const { ctx } = this;
+    const leaf = leafOn(new Date(this.timeMs));
+    const samples = sampleProfile(prof, leaf, 0.5);
+
+    // Split into runs of equal kind.
+    const runs: ProfileSample[][] = [];
+    for (const s of samples) {
+      const last = runs[runs.length - 1];
+      if (last && last[0].kind === s.kind) last.push(s); else {
+        // share the boundary sample so runs touch
+        if (last) last.push(s);
+        runs.push([s]);
+      }
+    }
+    // deterministic soft irregularity for crowns
+    const jit = (az: number) => 0.45 * Math.sin(az * 2.7) + 0.3 * Math.sin(az * 7.3 + 1.3) + 0.2 * Math.sin(az * 13.1);
+
+    const tops = (run: ProfileSample[], f: (s: ProfileSample) => number, j: boolean): Array<[number, number]> =>
+      run.map(s => [s.az, Math.max(0, f(s) + (j ? jit(s.az) : 0))]);
+    const bottom = (run: ProfileSample[]): Array<[number, number]> =>
+      [[run[run.length - 1].az, 0], [run[0].az, 0]];
+
+    const fillRun = (top: Array<[number, number]>, base: Array<[number, number]>, style: string) => {
+      ctx.beginPath(); this.pathPts(top, true); this.pathPts(base, false); ctx.closePath();
+      ctx.fillStyle = style; ctx.fill();
+    };
+    const edge = (top: Array<[number, number]>, style: string, w: number, dash?: number[], glow?: string) => {
+      ctx.beginPath(); this.pathPts(top, true);
+      ctx.strokeStyle = style; ctx.lineWidth = w; ctx.setLineDash(dash ?? []);
+      if (glow) { ctx.shadowColor = glow; ctx.shadowBlur = 5; }
+      ctx.stroke(); ctx.shadowBlur = 0; ctx.setLineDash([]);
+    };
+
+    ctx.save();
+    ctx.lineJoin = 'round';
+    for (const run of runs) {
+      const kind = run[0].kind;
+      const base = bottom(run);
+      if (kind === 'building') {
+        const t = tops(run, s => s.top, false);
+        fillRun(t, base, 'rgb(14,17,23)');
+        edge(t, 'rgba(120,135,160,0.45)', 1.2);
+      } else if (kind === 'estimated') {
+        const t = tops(run, s => s.top, false);
+        fillRun(t, base, 'rgba(34,42,56,0.62)');
+        edge(t, 'rgba(160,175,200,0.7)', 1.3, [6, 5]);
+      } else if (kind === 'conifer') {
+        const t = tops(run, s => s.top, true);
+        fillRun(t, base, 'rgb(9,20,15)');
+        edge(t, 'rgba(60,110,80,0.55)', 2.2, undefined, 'rgba(40,90,60,0.8)');
+      } else if (leaf) {
+        const t = tops(run, s => s.leafTop, true);
+        fillRun(t, base, 'rgb(11,24,17)');
+        edge(t, 'rgba(70,125,80,0.55)', 2.4, undefined, 'rgba(50,100,60,0.8)');
+      } else {
+        // bare: solid roofline behind, see-through branches above it
+        const rb = tops(run, s => s.bareTop, false);
+        fillRun(rb, base, 'rgb(14,17,23)');
+        edge(rb, 'rgba(120,135,160,0.45)', 1.2);
+        const crown = tops(run, s => s.leafTop, true);
+        const rev = rb.slice().reverse();
+        ctx.beginPath(); this.pathPts(crown, true); this.pathPts(rev, false); ctx.closePath();
+        ctx.fillStyle = 'rgba(14,26,18,0.34)'; ctx.fill();
+        edge(crown, 'rgba(90,130,95,0.35)', 1.4, [2, 3]);
+      }
+    }
+
+    // Walls at the east / west limits: bands of constant azimuth from horizon to zenith.
+    const band = (a: number, b: number) => {
+      const poly: Array<[number, number]> = [];
+      for (let alt = 0; alt <= 90; alt += 3) poly.push([a, alt]);
+      for (let alt = 90; alt >= 0; alt -= 3) poly.push([b, alt]);
+      ctx.beginPath(); this.pathPts(poly, true); ctx.closePath();
+      ctx.fillStyle = 'rgba(6,8,12,0.78)'; ctx.fill();
+    };
+    band(prof.azMin, prof.azMin + 2.5);
+    band(prof.azMax - 2.5, prof.azMax);
+    const wallEdge = (az: number) => {
+      const line: Array<[number, number]> = [];
+      for (let alt = 0; alt <= 90; alt += 3) line.push([az, alt]);
+      ctx.beginPath(); this.pathPts(line, true);
+      ctx.strokeStyle = 'rgba(120,135,160,0.4)'; ctx.lineWidth = 1; ctx.stroke();
+    };
+    wallEdge(prof.azMin + 2.5); wallEdge(prof.azMax - 2.5);
+    ctx.restore();
   }
 
   private drawGround(): void {
@@ -487,6 +593,7 @@ export class SkyView {
   // ── labels ────────────────────────────────────────────────────────────────
 
   private label(text: string, x: number, y: number, style: { font: string; color: string; align?: CanvasTextAlign; alpha?: number }): boolean {
+    if (style.alpha === 0) return false;
     const { ctx } = this;
     ctx.font = style.font;
     const w = ctx.measureText(text).width, h = 12;
@@ -506,9 +613,14 @@ export class SkyView {
     return true;
   }
 
-  private drawLabels(lim: number, win: { azCenter: number; halfWidth: number; label: string } | undefined): void {
+  private drawLabels(lim: number, win: ViewWindow | undefined): void {
     const { cam, tmp } = this;
-    const inFrame = (az: number, alt: number) => (win && inWindow(az, alt, win as any)) ? 1 : 0.5;
+    const date = new Date(this.timeMs);
+    const inFrame = (az: number, alt: number) => {
+      if (!win) return 1;
+      const v = visibility(win, az, alt, date);
+      return v === 'ok' ? 1 : v === 'blocked' && win.profile ? 0 : 0.5;
+    };
 
     // Planets & Moon
     this.bodies.forEach(b => {
@@ -656,10 +768,10 @@ export class SkyView {
     this.requestRender();
   }
 
-  private windowSpans(key: string, samples: () => Sample[], w: { azCenter: number; halfWidth: number; label: string }): string {
+  private windowSpans(key: string, samples: () => Sample[], w: ViewWindow): string {
     let s = this.spanCache.get(key);
     if (!s) { s = samples(); this.spanCache.set(key, s); }
-    const marked: Sample[] = s.map(q => ({ ...q, visible: inWindow(q.azimuth, q.altitude, w as any), window: w.label }));
+    const marked: Sample[] = s.map(q => ({ ...q, visible: isVisible(w, q.azimuth, q.altitude, q.time.date), window: w.label }));
     const spans = findVisSpans(marked);
     return spans.length ? spans.map(sp => `${fmtTime(sp.start)}–${fmtTime(sp.end)}`).join(', ') : '';
   }
@@ -706,7 +818,10 @@ export class SkyView {
           : `Not in any window tonight`;
       }
     }
-    const state = alt < 0 ? 'below horizon' : alt < config.minAlt ? 'too low' : '';
+    const vis = win ? visibility(win, az, alt, new Date(this.timeMs)) : 'ok';
+    const state = alt < 0 ? 'below horizon'
+      : vis === 'outside' ? 'outside window'
+      : vis === 'blocked' ? (win?.profile ? 'behind obstruction' : 'too low') : '';
     el.classList.remove('hidden');
     el.innerHTML = `
       <button class="sky-info__close" aria-label="Close">&times;</button>

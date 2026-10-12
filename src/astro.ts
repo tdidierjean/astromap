@@ -2,6 +2,7 @@
 // and the fast J2000 -> horizon rotation used for the star catalogue.
 import * as Astronomy from 'astronomy-engine';
 import { config, type ViewWindow } from './config';
+import { isVisible } from './horizon';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -66,14 +67,9 @@ export function angDiff(az: number, center: number): number {
   return ((az - center + 540) % 360) - 180;
 }
 
-export function inWindow(az: number, alt: number, w: ViewWindow): boolean {
-  return alt >= config.minAlt && Math.abs(angDiff(az, w.azCenter)) <= w.halfWidth;
-}
-
-export function checkWindows(az: number, alt: number): { visible: boolean; window?: string } {
-  if (alt < config.minAlt) return { visible: false };
+export function checkWindows(az: number, alt: number, date: Date): { visible: boolean; window?: string } {
   for (const w of config.windows) {
-    if (Math.abs(angDiff(az, w.azCenter)) <= w.halfWidth) return { visible: true, window: w.label };
+    if (isVisible(w, az, alt, date)) return { visible: true, window: w.label };
   }
   return { visible: false };
 }
@@ -118,11 +114,11 @@ export function computeData(night: Night, refTime: Astronomy.AstroTime): ObjectD
     for (let ms = startMs; ms <= endMs; ms += STEP_MS) {
       const t  = Astronomy.MakeTime(new Date(ms));
       const hz = getHorizon(obj.body, t, obs);
-      const cv = checkWindows(hz.azimuth, hz.altitude);
+      const cv = checkWindows(hz.azimuth, hz.altitude, t.date);
       samples.push({ time: t, azimuth: hz.azimuth, altitude: hz.altitude, ...cv });
     }
     const curHz = getHorizon(obj.body, refTime, obs);
-    const curV  = checkWindows(curHz.azimuth, curHz.altitude);
+    const curV  = checkWindows(curHz.azimuth, curHz.altitude, refTime.date);
     return {
       ...obj,
       samples,
@@ -185,7 +181,7 @@ export function sampleFixedStar(v: [number, number, number], night: Night): Samp
     const n = m[3] * v[0] + m[4] * v[1] + m[5] * v[2];
     const u = m[6] * v[0] + m[7] * v[1] + m[8] * v[2];
     const { az, alt } = enuToAzAlt(e, n, u);
-    out.push({ time: Astronomy.MakeTime(new Date(ms)), azimuth: az, altitude: alt, ...checkWindows(az, alt) });
+    out.push({ time: Astronomy.MakeTime(new Date(ms)), azimuth: az, altitude: alt, ...checkWindows(az, alt, new Date(ms)) });
   }
   return out;
 }

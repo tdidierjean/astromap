@@ -8,6 +8,7 @@ import {
   renderCards, renderTimeline, renderPanorama, updateNightNav, setupNightNav, setupSettings, setupTimelinePick,
 } from './planner';
 import { SkyView } from './sky/sky';
+import { leafOn, isVisible } from './horizon';
 import { twilightName } from './sky/palette';
 
 // Inject object dot styles into <head> once
@@ -54,7 +55,9 @@ function updateTimeUI(): void {
     $('scrub-end').textContent = `${fmtTime(night.end.date)} ☀↑`;
   }
   $('sky-time').textContent = fmtDateTime(new Date(skyMs));
-  $('sky-twilight').textContent = twilightName(sky.sunAltitude);
+  const w = config.windows[sky.windowIndex];
+  $('sky-twilight').textContent = twilightName(sky.sunAltitude) +
+    (w?.profile ? ` \u00b7 trees ${leafOn(new Date(skyMs)) ? 'in leaf' : 'bare'}` : '');
   $('btn-now').classList.toggle('active', nowMode);
 }
 
@@ -90,7 +93,7 @@ function renderPlan(): void {
   const isCurrent = state.offsetDays === 0;
   renderCards(data);
   renderTimeline(data, night, isCurrent, skyMs);
-  renderPanorama(data, isCurrent);
+  renderPanorama(data, isCurrent, new Date(skyMs));
 }
 
 // ─── Tabs & sky controls ──────────────────────────────────────────────────────
@@ -112,7 +115,7 @@ function buildWindowPills(): void {
     b.className = 'pill' + (i === sky.windowIndex ? ' active' : '');
     b.textContent = w.label;
     b.addEventListener('click', () => {
-      sky.setWindow(i); buildWindowPills();
+      sky.setWindow(i); buildWindowPills(); updateTimeUI();
       try { localStorage.setItem('astromap-window', String(i)); } catch { /* ignore */ }
     });
     box.appendChild(b);
@@ -178,7 +181,8 @@ window.addEventListener('load', () => {
 
   // Test/debug hook
   (window as any).__astromap = {
-    sky, showTab,
+    sky, showTab, config,
+    isVisible: (w: number, az: number, alt: number, ms: number) => isVisible(config.windows[w], az, alt, new Date(ms)),
     setTime: (ms: number) => setSkyTime(ms),
     setWindow: (i: number) => { sky.setWindow(i); buildWindowPills(); },
   };
