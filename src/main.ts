@@ -2,7 +2,7 @@
 import * as Astronomy from 'astronomy-engine';
 import { config, saveConfig } from './config';
 import { TZ, fmtTime, fmtDateTime } from './format';
-import { OBJECTS, observer, getNight, computeData, type Night, type ObjectData } from './astro';
+import { OBJECTS, observer, getNight, computeData, updateCurrent, type Night, type ObjectData } from './astro';
 import { state } from './state';
 import {
   renderCards, renderTimeline, renderPanorama, updateNightNav, setupNightNav, setupSettings, setupTimelinePick,
@@ -26,6 +26,7 @@ let sky: SkyView;
 
 // Sky time: either follows the wall clock ("now" mode) or a user-chosen instant.
 let nowMode = true;
+let picked = false; // the user has chosen a time (scrubber, timeline tap or time field)
 let skyMs = Date.now();
 let skyFrac = 0.3; // remembered position within the night, used when changing nights
 let activeTab: 'sky' | 'plan' = 'sky';
@@ -35,13 +36,14 @@ let activeTab: 'sky' | 'plan' = 'sky';
 function setSkyTime(ms: number, fromNow = false): void {
   skyMs = ms;
   nowMode = fromNow;
+  picked = !fromNow;
   if (night) {
     const a = night.start.date.getTime(), b = night.end.date.getTime();
     if (ms >= a && ms <= b) skyFrac = (ms - a) / (b - a);
   }
   sky.setTime(ms);
   updateTimeUI();
-  if (activeTab === 'plan' && night) renderTimeline(data, night, state.offsetDays === 0, skyMs);
+  if (activeTab === 'plan' && night) { updateCurrent(data, Astronomy.MakeTime(new Date(skyMs))); renderPlan(); }
 }
 
 function updateTimeUI(): void {
@@ -59,6 +61,11 @@ function updateTimeUI(): void {
   $('sky-twilight').textContent = twilightName(sky.sunAltitude) +
     (w?.profile ? ` \u00b7 trees ${leafOn(new Date(skyMs)) ? 'in leaf' : 'bare'}` : '');
   $('btn-now').classList.toggle('active', nowMode);
+  const tp = $<HTMLInputElement>('time-picker');
+  if (document.activeElement !== tp) {
+    const d = new Date(skyMs);
+    tp.value = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  }
 }
 
 // ─── Refresh ──────────────────────────────────────────────────────────────────
@@ -72,16 +79,12 @@ function refresh(reposition = false): void {
 
   setLeafRefDate(night ? night.start.date : null);
   if (night) {
-    const isCurrent = state.offsetDays === 0;
-    // For tonight use the actual current time; for other nights use the night's midpoint
-    const refTime = isCurrent
-      ? Astronomy.MakeTime(new Date())
-      : Astronomy.MakeTime(new Date((night.start.date.getTime() + night.end.date.getTime()) / 2));
-    data = computeData(night, refTime);
+    data = computeData(night, Astronomy.MakeTime(new Date()));
     const a = night.start.date.getTime(), b = night.end.date.getTime();
     if (nowMode) skyMs = Date.now();
     else if (reposition || skyMs < a || skyMs > b) skyMs = a + skyFrac * (b - a);
     sky.setNight(night, data);
+    updateCurrent(data, Astronomy.MakeTime(new Date(skyMs)));
     sky.setTime(skyMs);
     updateTimeUI();
     if (activeTab === 'plan') renderPlan();
@@ -92,7 +95,7 @@ function refresh(reposition = false): void {
 function renderPlan(): void {
   if (!night) return;
   const isCurrent = state.offsetDays === 0;
-  renderCards(data);
+  renderCards(data, skyMs, nowMode, nowMode || picked);
   renderTimeline(data, night, isCurrent, skyMs);
   renderPanorama(data, isCurrent, new Date(skyMs));
 }
@@ -163,6 +166,18 @@ function setupSkyControls(): void {
   });
 
   setupTimelinePick(ms => { setSkyTime(ms); });
+
+  // Plan-tab time field: same shared state as the scrubber. Picks the matching clock time inside the shown night.
+  $<HTMLInputElement>('time-picker').addEventListener('input', e => {
+    if (!night) return;
+    const [h, m] = (e.target as HTMLInputElement).value.split(':').map(Number);
+    if (Number.isNaN(h) || Number.isNaN(m)) return;
+    const a = night.start.date.getTime(), b = night.end.date.getTime();
+    const cands = [0, 1].map(k => { const d = new Date(a); d.setDate(d.getDate() + k); d.setHours(h, m, 0, 0); return d.getTime(); });
+    const hit = cands.find(t => t >= a && t <= b) ?? (Math.abs(cands[0] - a) < Math.abs(cands[1] - a) ? cands[0] : cands[1]);
+    setSkyTime(Math.min(Math.max(hit, a), b));
+  });
+  $('time-now').addEventListener('click', () => $('btn-now').click());
 }
 
 function updateClock(): void {

@@ -8,47 +8,42 @@ import { state, MIN_OFFSET, MAX_OFFSET } from './state';
 
 // ─── Render: cards ────────────────────────────────────────────────────────────
 
-export function renderCards(data: ObjectData[]): void {
-  const isCurrent = state.offsetDays === 0;
-  const phaseRefTime = isCurrent
-    ? Astronomy.MakeTime(new Date())
-    : Astronomy.MakeTime(new Date(Date.now() + state.offsetDays * 86_400_000));
-  const phase    = Astronomy.MoonPhase(phaseRefTime);
+/**
+ * @param refMs          the displayed moment (shared time state: live clock, scrubber or picked time)
+ * @param isLive         following the wall clock
+ * @param relativeToRef  live or user-picked time: show the window relative to refMs; browsing another
+ *                       night with no picked time: show that night's first window
+ */
+export function renderCards(data: ObjectData[], refMs: number, isLive: boolean, relativeToRef: boolean): void {
+  const phase    = Astronomy.MoonPhase(Astronomy.MakeTime(new Date(refMs)));
   const phaseStr = moonPhaseText(phase);
-  const nowMs    = Date.now();
 
   document.getElementById('cards')!.innerHTML = data.map(obj => {
-    const spans  = findVisSpans(obj.samples);
+    const spans  = obj.visSpans;
     const hasAny = spans.length > 0;
 
-    // For tonight: find the first span that hasn't ended yet.
-    // For future/past nights: just show the first span (all are equally "upcoming" or past).
-    const primary = isCurrent
-      ? spans.find(s => s.end.getTime() > nowMs)
-      : spans[0];
+    const primary = relativeToRef ? spans.find(s => s.end.getTime() > refMs) : spans[0];
 
     let windowStr = '—';
     let dirStr    = '';
     if (primary) {
-      const inProgress = isCurrent && primary.start.getTime() <= nowMs;
+      const inProgress = primary.start.getTime() <= refMs;
       windowStr = inProgress
-        ? `Now &ndash; ${fmtTime(primary.end)}`
+        ? `${isLive ? 'Now' : fmtTime(primary.start)} &ndash; ${fmtTime(primary.end)}`
         : `${fmtTime(primary.start)} &ndash; ${fmtTime(primary.end)}`;
       dirStr = primary.direction;
     }
 
-    // For tonight: show current live position.
-    // For other nights: show position at night midpoint, labelled.
-    const posStr = isCurrent
-      ? (obj.curAlt > -1
-          ? `Alt&nbsp;${obj.curAlt.toFixed(0)}&deg;&nbsp;&middot;&nbsp;Az&nbsp;${obj.curAz.toFixed(0)}&deg;`
-          : 'Below horizon')
-      : `~Midnight:&nbsp;Alt&nbsp;${obj.curAlt.toFixed(0)}&deg;&nbsp;&middot;&nbsp;Az&nbsp;${obj.curAz.toFixed(0)}&deg;`;
+    // Position at the displayed moment.
+    const posPrefix = isLive ? '' : `At&nbsp;${fmtTime(new Date(refMs))}:&nbsp;`;
+    const posStr = obj.curAlt > -1
+      ? `${posPrefix}Alt&nbsp;${obj.curAlt.toFixed(0)}&deg;&nbsp;&middot;&nbsp;Az&nbsp;${obj.curAz.toFixed(0)}&deg;`
+      : `${posPrefix}Below horizon`;
 
     // Show remaining spans after the primary one
-    const rest = primary ? spans.filter(s => s !== primary) : spans.slice(1);
+    const rest = spans.filter(s => s !== primary);
     const extras = rest.length > 0
-      ? rest.map(s => `<div class="card__extra">also ${fmtTime(s.start)}&ndash;${fmtTime(s.end)} (${s.direction})</div>`).join('')
+      ? rest.map(s => `<div class="card__extra">${primary ? 'also' : 'earlier'} ${fmtTime(s.start)}&ndash;${fmtTime(s.end)} (${s.direction})</div>`).join('')
       : '';
 
     const phaseInfo = obj.name === 'Moon'
@@ -381,8 +376,8 @@ export function renderPanorama(data: ObjectData[], isCurrent = false, refDate: D
     }
   }
 
-  // Current-position dots (tonight only)
-  if (isCurrent) {
+  // Position dots for the displayed moment
+  {
     for (const obj of data) {
       if (obj.curAlt <= 0) continue;
       const x = toX(obj.curAz);

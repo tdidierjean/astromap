@@ -106,6 +106,28 @@ html, body { height: 100%; }
   margin-top: 2px;
 }
 
+.plan-time { display: flex; align-items: center; gap: 8px; font-size: 0.8rem; color: var(--muted); margin-bottom: -10px; }
+
+.time-picker {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-family: monospace;
+  padding: 2px 4px;
+  width: 100px;
+  padding: 4px 6px;
+  color-scheme: dark;
+}
+
+.time-now-btn {
+  width: auto;
+  height: 28px;
+  padding: 0 12px;
+  font-size: 0.8rem;
+}
+
 /* ── Main layout ── */
 .main {
   max-width: 1100px;
