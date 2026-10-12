@@ -8,7 +8,7 @@ import {
   renderCards, renderTimeline, renderPanorama, updateNightNav, setupNightNav, setupSettings, setupTimelinePick,
 } from './planner';
 import { SkyView } from './sky/sky';
-import { leafOn, isVisible } from './horizon';
+import { leafOn, isVisible, setLeafRefDate } from './horizon';
 import { twilightName } from './sky/palette';
 
 // Inject object dot styles into <head> once
@@ -70,6 +70,7 @@ function refresh(reposition = false): void {
   night = getNight(refDate, obs);
   updateNightNav(night);
 
+  setLeafRefDate(night ? night.start.date : null);
   if (night) {
     const isCurrent = state.offsetDays === 0;
     // For tonight use the actual current time; for other nights use the night's midpoint
@@ -181,7 +182,7 @@ window.addEventListener('load', () => {
 
   // Test/debug hook
   (window as any).__astromap = {
-    sky, showTab, config,
+    sky, showTab, config, setLeafRef: (ms: number | null) => { setLeafRefDate(ms == null ? null : new Date(ms)); sky.settingsChanged(); updateTimeUI(); },
     isVisible: (w: number, az: number, alt: number, ms: number) => isVisible(config.windows[w], az, alt, new Date(ms)),
     setTime: (ms: number) => setSkyTime(ms),
     setWindow: (i: number) => { sky.setWindow(i); buildWindowPills(); },

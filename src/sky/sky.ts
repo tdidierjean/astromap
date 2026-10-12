@@ -8,7 +8,7 @@ import {
   findVisSpans, sampleFixedStar, type Night, type ObjectData, type Sample,
 } from '../astro';
 import { fmtTime, moonPhaseText } from '../format';
-import { Camera, clamp, altForHorizon, FOV_MIN, FOV_MAX, ALT_MIN, ALT_MAX, type View } from './camera';
+import { Camera, clamp, altForHorizon, defaultFraming, FOV_MIN, FOV_MAX, ALT_MIN, ALT_MAX, type View } from './camera';
 import { skyColors, rgb, twilightName, twilightLimit, starColor } from './palette';
 
 const D2R = Math.PI / 180;
@@ -59,6 +59,7 @@ export class SkyView {
   private selected: Selection = null;
   private raf = 0;
   private needsCamReset = true;
+  private edgeHints: Array<{ x0: number; x1: number; y0: number; y1: number; az: number; side: -1 | 1 }> = [];
 
   constructor(private canvas: HTMLCanvasElement, private stage: HTMLElement, private infoEl: HTMLElement) {
     this.ctx = canvas.getContext('2d')!;
@@ -99,7 +100,11 @@ export class SkyView {
   setView(v: Partial<View>): void {
     this.view = { ...this.view, ...v };
     this.view.fov = clamp(this.view.fov, FOV_MIN, FOV_MAX);
-    this.view.alt = clamp(this.view.alt, ALT_MIN, ALT_MAX);
+    // Users don't need to look at the ground: keep the horizon at/below 60% of the canvas height
+    // and the view centre at >= 5 deg altitude.
+    const { W, H } = this.cam;
+    const altMin = W > 1 ? Math.max(5, altForHorizon(this.view.fov, W, H, 0.6)) : 5;
+    this.view.alt = clamp(this.view.alt, altMin, ALT_MAX);
     this.view.az = ((this.view.az % 360) + 360) % 360;
     this.requestRender();
   }
@@ -108,8 +113,8 @@ export class SkyView {
     const w = config.windows[this.winIdx];
     if (!w) return;
     const W = this.cam.W, H = this.cam.H;
-    const fov = clamp(w.halfWidth * 2 * 1.08, 70, 150);
-    this.view = { az: w.azCenter, alt: W > 1 ? altForHorizon(fov, W, H) : 55, fov };
+    const fr = W > 1 ? defaultFraming(W, H) : { alt: 35, fov: 60 };
+    this.view = { az: w.azCenter, alt: fr.alt, fov: fr.fov };
     this.needsCamReset = false;
     this.requestRender();
   }
@@ -160,7 +165,7 @@ export class SkyView {
     this.canvas.height = Math.round(H * this.dpr);
     const first = this.needsCamReset || this.cam.W <= 1;
     this.cam.W = W; this.cam.H = H;
-    if (first) this.resetView();
+    if (first) this.resetView(); else this.setView({});
     this.render();
   }
 
@@ -185,6 +190,7 @@ export class SkyView {
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     this.labelRects.length = 0;
     this.hits.length = 0;
+    this.edgeHints.length = 0;
 
     const win = config.windows[this.winIdx];
     const lim = this.effLimit();
@@ -207,6 +213,7 @@ export class SkyView {
     if (win?.profile) this.drawProfile(win);
     this.drawHorizon();
     this.drawLabels(lim, win);
+    if (win) this.drawEdgeHints(win);
     this.drawSelection();
   }
 
@@ -506,8 +513,8 @@ export class SkyView {
         const crown = tops(run, s => s.leafTop, true);
         const rev = rb.slice().reverse();
         ctx.beginPath(); this.pathPts(crown, true); this.pathPts(rev, false); ctx.closePath();
-        ctx.fillStyle = 'rgba(14,26,18,0.34)'; ctx.fill();
-        edge(crown, 'rgba(90,130,95,0.35)', 1.4, [2, 3]);
+        ctx.fillStyle = 'rgba(14,26,18,0.22)'; ctx.fill();
+        edge(crown, 'rgba(110,160,115,0.6)', 1.6, [2, 3]);
       }
     }
 
@@ -669,6 +676,47 @@ export class SkyView {
     }
   }
 
+  /** Chevron hints at the screen edges when the window's az limit is off-screen; tap to pan there. */
+  private drawEdgeHints(win: ViewWindow): void {
+    const { ctx, cam, tmp } = this;
+    const prof = win.profile;
+    if (!prof && win.halfWidth >= 170) return;
+    const lo = prof ? prof.azMin : ((win.azCenter - win.halfWidth) % 360 + 360) % 360;
+    const hi = prof ? prof.azMax : win.azCenter + win.halfWidth;
+    const hint = (az: number, side: -1 | 1) => {
+      const [e, n, u] = azAltToEnu(az, 6);
+      if (!cam.project(e, n, u, tmp)) return;
+      const x = tmp[0];
+      if (side < 0 ? x > 6 : x < cam.W - 6) return; // limit is on-screen
+      const y = clamp(tmp[1], cam.H * 0.72, cam.H * 0.88);
+      const txt = side < 0 ? `\u2039 ${Math.round(az) % 360}\u00b0` : `${Math.round(az) % 360}\u00b0 \u203a`;
+      ctx.font = '600 12px -apple-system, "Segoe UI", sans-serif';
+      const w = ctx.measureText(txt).width + 14, h = 24;
+      const x0 = side < 0 ? 4 : cam.W - 4 - w, y0 = y - h / 2;
+      ctx.fillStyle = 'rgba(20,28,44,0.72)';
+      ctx.beginPath(); ctx.roundRect(x0, y0, w, h, 12); ctx.fill();
+      ctx.strokeStyle = 'rgba(110,170,255,0.35)'; ctx.lineWidth = 1; ctx.stroke();
+      ctx.fillStyle = 'rgba(190,210,240,0.85)'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(txt, x0 + w / 2, y);
+      this.edgeHints.push({ x0: x0 - 6, x1: x0 + w + 6, y0: y0 - 8, y1: y0 + h + 8, az, side });
+    };
+    hint(lo, -1);
+    hint(hi, 1);
+  }
+
+  /** Pan so that the given window limit sits ~15% inside the screen edge. */
+  private panToEdge(h: { az: number; side: -1 | 1 }): void {
+    const { cam } = this;
+    const [e0, n0, u0] = azAltToEnu(this.view.az, 6);
+    cam.project(e0, n0, u0, this.tmp);
+    const yRef = this.tmp[1];
+    const [e, n, u] = cam.unproject(cam.W * (h.side < 0 ? 0.15 : 0.85), yRef);
+    const a = enuToAzAlt(e, n, u).az;
+    let d = ((this.view.az - a + 540) % 360) - 180; // signed offset of centre from that screen point
+    d = h.side < 0 ? Math.abs(d) : -Math.abs(d);
+    this.setView({ az: h.az + d });
+  }
+
   private drawSelection(): void {
     const pos = this.selectionScreenPos();
     if (!pos) return;
@@ -754,6 +802,9 @@ export class SkyView {
   // ── tap for info ──────────────────────────────────────────────────────────
 
   private handleTap(x: number, y: number): void {
+    for (const h of this.edgeHints) {
+      if (x >= h.x0 && x <= h.x1 && y >= h.y0 && y <= h.y1) { this.panToEdge(h); return; }
+    }
     let best: Hit | null = null, bestD = 22;
     for (const h of this.hits) {
       const d = Math.hypot(h.x - x, h.y - y) - h.bias;

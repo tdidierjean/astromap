@@ -6,8 +6,13 @@ export const PROFILE_FLOOR = 2;
 
 const norm = (az: number) => ((az % 360) + 360) % 360;
 
-/** Are deciduous trees in leaf at this date? (Auto: ~25 April to ~10 November.) */
-export function leafOn(date: Date): boolean {
+let leafRef: Date | null = null;
+/** Date of the browsed night; when set it decides the leaf state everywhere (so label and night agree). */
+export function setLeafRefDate(d: Date | null): void { leafRef = d; }
+
+/** Are deciduous trees in leaf? (Auto: ~25 April to ~10 November, by the browsed night's date.) */
+export function leafOn(dateArg: Date): boolean {
+  const date = leafRef ?? dateArg;
   if (config.leaf === 'leaf') return true;
   if (config.leaf === 'bare') return false;
   const md = (date.getUTCMonth() + 1) * 100 + date.getUTCDate();
