@@ -1,7 +1,7 @@
 // Sky view: canvas renderer, pan/zoom interaction, tap-for-info.
 import * as Astronomy from 'astronomy-engine';
 import { config, type ViewWindow } from '../config';
-import { visibility, isVisible, leafOn, sampleProfile, type ProfileSample } from '../horizon';
+import { visibility, isVisible, leafOn, sampleProfile, profileSpan, type ProfileSample } from '../horizon';
 import { catalog } from '../catalog';
 import {
   OBJECTS, observer, getHorizon, bodyMagnitude, eqjToEnu, enuToAzAlt, azAltToEnu,
@@ -430,7 +430,7 @@ export class SkyView {
       cam.projectClamped(e, n, u, tmp);
       pts.push([tmp[0], tmp[1]]);
     };
-    const lo = prof ? prof.azMin : win.azCenter - win.halfWidth, hi = prof ? prof.azMax : win.azCenter + win.halfWidth;
+    const lo = prof ? prof.azMin : win.azCenter - win.halfWidth, hi = prof ? prof.azMin + profileSpan(prof) : win.azCenter + win.halfWidth;
     const full = !prof && win.halfWidth >= 180;
     const a0 = full ? 0 : lo, a1 = full ? 360 : hi;
     for (let az = a0; az < a1; az += 3) add(az, floor);
@@ -544,15 +544,16 @@ export class SkyView {
       ctx.beginPath(); this.pathPts(poly, true); ctx.closePath();
       ctx.fillStyle = 'rgba(6,8,12,0.78)'; ctx.fill();
     };
-    band(prof.azMin, prof.azMin + 2.5);
-    band(prof.azMax - 2.5, prof.azMax);
+    const aLo = prof.azMin, aHi = prof.azMin + profileSpan(prof); // unwrapped, aHi may exceed 360
+    band(aLo, aLo + 2.5);
+    band(aHi - 2.5, aHi);
     const wallEdge = (az: number) => {
       const line: Array<[number, number]> = [];
       for (let alt = 0; alt <= 90; alt += 3) line.push([az, alt]);
       ctx.beginPath(); this.pathPts(line, true);
       ctx.strokeStyle = 'rgba(120,135,160,0.4)'; ctx.lineWidth = 1; ctx.stroke();
     };
-    wallEdge(prof.azMin + 2.5); wallEdge(prof.azMax - 2.5);
+    wallEdge(aLo + 2.5); wallEdge(aHi - 2.5);
     ctx.restore();
   }
 
@@ -700,7 +701,7 @@ export class SkyView {
     const prof = win.profile;
     if (!prof && win.halfWidth >= 170) return;
     const lo = prof ? prof.azMin : ((win.azCenter - win.halfWidth) % 360 + 360) % 360;
-    const hi = prof ? prof.azMax : win.azCenter + win.halfWidth;
+    const hi = prof ? prof.azMin + profileSpan(prof) : win.azCenter + win.halfWidth;
     const hint = (az: number, side: -1 | 1) => {
       const [e, n, u] = azAltToEnu(az, 6);
       if (!cam.project(e, n, u, tmp)) return;

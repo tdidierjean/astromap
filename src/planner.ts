@@ -273,11 +273,18 @@ export function renderPanorama(data: ObjectData[], isCurrent = false, refDate: D
     const p = w.profile;
     if (!p) continue;
     ctx.fillStyle = '#ffffff0c';
-    ctx.fillRect(toX(p.azMin), PT, toX(p.azMax) - toX(p.azMin), plotH);
+    {
+      // open-sky shading; split in two when the range crosses 360 -> 0
+      const x0 = toX(p.azMin), x1 = toX(((p.azMax % 360) + 360) % 360);
+      if (p.azMin <= p.azMax) ctx.fillRect(x0, PT, x1 - x0, plotH);
+      else { ctx.fillRect(x0, PT, toX(360) - x0, plotH); ctx.fillRect(toX(0), PT, x1 - toX(0), plotH); }
+    }
     const sm = sampleProfile(p, leaf, 1);
+    const mx = (az: number) => ((az % 360) + 360) % 360;
     for (let i = 0; i < sm.length - 1; i++) {
       const a = sm[i], b = sm[i + 1];
-      const x0 = toX(a.az), x1 = toX(b.az) + 0.5;
+      const x0 = toX(mx(a.az));
+      const x1 = (mx(b.az) < mx(a.az) ? toX(360) : toX(mx(b.az))) + 0.5; // segment ending at the 360/0 seam
       ctx.fillStyle = KIND_FILL[a.kind];
       ctx.globalAlpha = a.kind === 'estimated' ? 0.6 : 1;
       const y0 = toY(a.top), y1 = toY(b.top);
@@ -292,16 +299,18 @@ export function renderPanorama(data: ObjectData[], isCurrent = false, refDate: D
     }
     // dashed top edge where the profile is estimated
     ctx.strokeStyle = '#9aa7bc'; ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
-    ctx.beginPath(); let pen = false;
+    ctx.beginPath(); let pen = false, prevAz = 0;
     for (const s of sm) {
-      if (s.kind === 'estimated') { pen ? ctx.lineTo(toX(s.az), toY(s.top)) : ctx.moveTo(toX(s.az), toY(s.top)); pen = true; }
+      const cur = s;
+      if (s.kind === 'estimated') { pen && mx(s.az) > mx(prevAz) ? ctx.lineTo(toX(mx(s.az)), toY(s.top)) : ctx.moveTo(toX(mx(s.az)), toY(s.top)); pen = true; }
       else pen = false;
+      prevAz = cur.az;
     }
     ctx.stroke(); ctx.setLineDash([]);
     // walls
     ctx.fillStyle = '#0b0d11';
-    ctx.fillRect(toX(p.azMin) - 2, PT, 2, plotH);
-    ctx.fillRect(toX(p.azMax), PT, 2, plotH);
+    ctx.fillRect(toX(mx(p.azMin)) - 2, PT, 2, plotH);
+    ctx.fillRect(toX(mx(p.azMax)), PT, 2, plotH);
   }
 
   // Altitude gridlines + labels
@@ -436,16 +445,18 @@ export function syncUI(): void {
   updateWindowHint('n', config.windows[0].halfWidth);
   updateWindowHint('s', config.windows[1].halfWidth);
   document.getElementById('min-alt-val')!.textContent = `${config.minAlt}\u00b0`;
-  // South window: measured profile vs simple window
-  const sw = config.windows[1];
-  const prof = sw.profile;
-  document.getElementById('s-profile')!.classList.toggle('hidden', !prof);
-  document.getElementById('s-simple')!.classList.toggle('hidden', !!prof);
-  document.getElementById('s-restore-profile')!.classList.toggle('hidden', !sw.profileOptOut || !!prof);
-  if (prof) {
-    document.getElementById('s-profile-text')!.textContent =
-      `Horizon: ${prof.source} (${prof.azMin}\u00b0\u2013${prof.azMax}\u00b0)`;
-  }
+  // Per window: measured profile vs simple window
+  (['n', 's'] as const).forEach((side, i) => {
+    const w = config.windows[i];
+    const prof = w.profile;
+    document.getElementById(`${side}-profile`)!.classList.toggle('hidden', !prof);
+    document.getElementById(`${side}-simple`)!.classList.toggle('hidden', !!prof);
+    document.getElementById(`${side}-restore-profile`)!.classList.toggle('hidden', !w.profileOptOut || !!prof);
+    if (prof) {
+      document.getElementById(`${side}-profile-text`)!.textContent =
+        `Horizon: ${prof.source} (${prof.azMin}\u00b0\u2013${prof.azMax}\u00b0)`;
+    }
+  });
 }
 
 function updateWindowHint(side: 'n' | 's', half: number): void {
@@ -471,15 +482,17 @@ export function setupSettings(refresh: () => void): void {
     config.leaf = (e.target as HTMLSelectElement).value as LeafMode;
     saveConfig(); refresh();
   });
-  document.getElementById('s-reset-profile')!.addEventListener('click', () => {
-    const w = config.windows[1];
-    w.profile = undefined; w.profileOptOut = true; w.azCenter = 180; w.halfWidth = 45;
-    saveConfig(); syncUI(); refresh();
-  });
-  document.getElementById('s-restore-profile')!.addEventListener('click', () => {
-    const d = DEFAULT_CONFIG.windows[1], w = config.windows[1];
-    w.profile = structuredClone(d.profile); w.profileOptOut = false; w.azCenter = d.azCenter; w.halfWidth = d.halfWidth;
-    saveConfig(); syncUI(); refresh();
+  (['n', 's'] as const).forEach((side, i) => {
+    document.getElementById(`${side}-reset-profile`)!.addEventListener('click', () => {
+      const w = config.windows[i];
+      w.profile = undefined; w.profileOptOut = true; w.azCenter = side === 'n' ? 0 : 180; w.halfWidth = 45;
+      saveConfig(); syncUI(); refresh();
+    });
+    document.getElementById(`${side}-restore-profile`)!.addEventListener('click', () => {
+      const d = DEFAULT_CONFIG.windows[i], w = config.windows[i];
+      w.profile = structuredClone(d.profile); w.profileOptOut = false; w.azCenter = d.azCenter; w.halfWidth = d.halfWidth;
+      saveConfig(); syncUI(); refresh();
+    });
   });
 
   on('n-half',  v => { config.windows[0].halfWidth = v; updateWindowHint('n', v); });

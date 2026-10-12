@@ -1,6 +1,7 @@
 // Persistent user configuration (localStorage) and shared type definitions.
 
 import { HORIZON_SOUTH } from './data/horizon-south';
+import { HORIZON_NORTH } from './data/horizon-north';
 
 /** building: always blocks; tree: deciduous (blocks in leaf, `bare` = roofline behind it);
  *  conifer: always blocks; estimated: unmeasured stretch, assumed. */
@@ -8,7 +9,8 @@ export type ProfileKind = 'building' | 'tree' | 'conifer' | 'estimated';
 /** `kind` describes the segment starting at this point. */
 export interface ProfilePoint { az: number; alt: number; kind: ProfileKind; bare?: number; }
 export interface HorizonProfile {
-  /** East / west limits (walls, full height). azMin < azMax, degrees 0-360. */
+  /** West / east limits (walls, full height), degrees 0-360. The range runs clockwise from azMin to azMax
+   *  and may cross north (azMin > azMax, e.g. 300 -> 84). */
   azMin: number;
   azMax: number;
   points: ProfilePoint[];
@@ -44,7 +46,7 @@ export const DEFAULT_CONFIG: Config = {
   lon: 7.12,
   elev: 60,
   windows: [
-    { label: 'North', azCenter: 0,   halfWidth: 45 },
+    { label: 'North', azCenter: 12, halfWidth: 72, profile: HORIZON_NORTH },
     { label: 'South', azCenter: 163.5, halfWidth: 72.5, profile: HORIZON_SOUTH },
   ],
   minAlt: 10,
