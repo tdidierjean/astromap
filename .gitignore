@@ -6,3 +6,4 @@ bun.lock
 # horizon-measurement photos show the user's home; keep local only
 tools/horizon/photos/
 __pycache__/
+_site/
