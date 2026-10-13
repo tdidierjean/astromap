@@ -9,6 +9,7 @@ Tracks the **Moon, Venus, Mercury, Mars, Jupiter and Saturn**, tells you when ea
 ### Sky tab (main screen)
 
 - Stereographic star map centred on the selected window (North / South), horizon near the bottom, ground and cardinal labels
+- Moon tracking: an edge chip (phase icon, altitude, compass, arrow) points to the Moon when it is up but off-screen (tap to pan to it); when it is hidden by trees/roofs or outside the window it is drawn as a faint outlined disc; when below the horizon a chip shows its next rise. Default zoom is set by `DEFAULT_TOP_ALT` in `src/sky/camera.ts`
 - ~1600 stars down to magnitude 5, sized by magnitude with glow; limiting-magnitude slider (default 4.0, also capped by twilight)
 - Constellation lines (dim), asterisms such as the Big Dipper and Summer Triangle (brighter), constellation and star names
 - Planets and the Moon (with phase shading); sky colour follows the Sun's altitude

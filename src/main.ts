@@ -7,7 +7,7 @@ import { state } from './state';
 import {
   renderCards, renderTimeline, renderPanorama, updateNightNav, setupNightNav, setupSettings, setupTimelinePick,
 } from './planner';
-import { SkyView } from './sky/sky';
+import { SkyView, compass16 } from './sky/sky';
 import { leafOn, isVisible, setLeafRefDate } from './horizon';
 import { twilightName } from './sky/palette';
 
@@ -59,7 +59,12 @@ function updateTimeUI(): void {
   $('sky-time').textContent = fmtDateTime(new Date(skyMs));
   const w = config.windows[sky.windowIndex];
   $('sky-twilight').textContent = twilightName(sky.sunAltitude) +
-    (w?.profile ? ` \u00b7 trees ${leafOn(new Date(skyMs)) ? 'in leaf' : 'bare'}` : '');
+    (w?.profile ? ` \u00b7 trees ${leafOn(new Date(skyMs)) ? 'in leaf' : 'bare'}` : '') +
+    (() => {
+      const m = sky.moonStatus;
+      if (!m) return '';
+      return m.up ? ` \u00b7 Moon ${m.pct}% \u00b7 ${Math.round(m.alt)}\u00b0 ${compass16(m.az)}` : ` \u00b7 Moon ${m.pct}% \u00b7 down`;
+    })();
   $('btn-now').classList.toggle('active', nowMode);
   const tp = $<HTMLInputElement>('time-picker');
   if (document.activeElement !== tp) {

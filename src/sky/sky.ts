@@ -14,6 +14,11 @@ import { skyColors, rgb, twilightName, twilightLimit, starColor } from './palett
 const D2R = Math.PI / 180;
 const COMPASS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
 export const compassName = (az: number) => COMPASS[Math.round(az / 45) % 8];
+const COMPASS16 = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
+export const compass16 = (az: number) => COMPASS16[Math.round(((az % 360) + 360) % 360 / 22.5) % 16];
+
+/** Bodies that get an off-screen edge indicator (and a visible-but-hidden marker). Add planet names later. */
+const INDICATOR_BODIES = new Set(['Moon']);
 
 interface BodyState {
   name: string; color: string;
@@ -36,6 +41,8 @@ export class SkyView {
   private sunAlt = -30;
   private sunEnu: [number, number, number] = [0, 0, -1];
   private moonElong = 180;
+  private moonEvent: { kind: 'rises' | 'sets'; date: Date; az: number } | null = null;
+  private bodyChips: Array<{ x0: number; x1: number; y0: number; y1: number; idx: number }> = [];
   private bodies: BodyState[] = [];
 
   private night: Night | null = null;
@@ -154,8 +161,22 @@ export class SkyView {
                enu: azAltToEnu(hz.azimuth, hz.altitude), mag: bodyMagnitude(o.body, t) };
     });
     this.moonElong = Astronomy.MoonPhase(t);
+    this.moonEvent = null;
+    const moon = this.bodies.find(b => b.name === 'Moon');
+    if (moon && moon.alt < 0) {
+      const body = OBJECTS.find(o => o.name === 'Moon')!.body;
+      const r = Astronomy.SearchRiseSet(body, obs, +1, t, 2);
+      if (r) this.moonEvent = { kind: 'rises', date: r.date, az: getHorizon(body, r, obs, null).azimuth };
+    }
     this.refreshInfo();
     this.requestRender();
+  }
+
+  /** Compact Moon status for the time panel. */
+  get moonStatus(): { up: boolean; pct: number; alt: number; az: number } | null {
+    const b = this.bodies.find(x => x.name === 'Moon');
+    if (!b) return null;
+    return { up: b.alt >= 0, pct: Math.round((1 - Math.cos(this.moonElong * D2R)) / 2 * 100), alt: b.alt, az: b.az };
   }
 
   get sunAltitude(): number { return this.sunAlt; }
@@ -209,6 +230,7 @@ export class SkyView {
     this.labelRects.length = 0;
     this.hits.length = 0;
     this.edgeHints.length = 0;
+    this.bodyChips.length = 0;
 
     const win = config.windows[this.winIdx];
     const lim = this.effLimit();
@@ -231,7 +253,10 @@ export class SkyView {
     if (win?.profile) this.drawProfile(win);
     this.drawHorizon();
     this.drawLabels(lim, win);
+    this.drawHiddenBodies(win);
     if (win) this.drawEdgeHints(win);
+    this.drawBodyIndicators();
+    this.drawMoonBelowChip();
     this.drawSelection();
   }
 
@@ -386,22 +411,30 @@ export class SkyView {
     });
   }
 
-  private drawMoon(x: number, y: number, r: number, b: BodyState): void {
-    const { ctx, cam, tmp } = this;
-    // Direction on screen towards the Sun (bright limb side)
+  /** Screen angle of the Moon's bright limb (towards the Sun) for a Moon drawn at (x, y). */
+  private limbTheta(b: BodyState, x: number, y: number): number {
     const [mx, my, mz] = b.enu, [sx, sy, sz] = this.sunEnu;
     const d = mx * sx + my * sy + mz * sz;
     let tx = sx - d * mx, ty = sy - d * my, tz = sz - d * mz;
     const tl = Math.hypot(tx, ty, tz) || 1; tx /= tl; ty /= tl; tz /= tl;
     const eps = 0.03, p2 = [0, 0];
-    let theta = 0;
     const qx = mx + eps * tx, qy = my + eps * ty, qz = mz + eps * tz, ql = Math.hypot(qx, qy, qz);
-    if (cam.project(qx / ql, qy / ql, qz / ql, tmp)) { p2[0] = tmp[0]; p2[1] = tmp[1]; theta = Math.atan2(p2[1] - y, p2[0] - x); }
+    this.cam.projectClamped(qx / ql, qy / ql, qz / ql, p2);
+    return Math.atan2(p2[1] - y, p2[0] - x);
+  }
+
+  private drawMoon(x: number, y: number, r: number, b: BodyState): void {
+    const { ctx } = this;
+    const theta = this.limbTheta(b, x, y);
 
     const gr = ctx.createRadialGradient(x, y, r * 0.8, x, y, r * 4);
     gr.addColorStop(0, 'rgba(230,230,200,0.22)'); gr.addColorStop(1, 'rgba(230,230,200,0)');
     ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(x, y, r * 4, 0, 6.2832); ctx.fill();
+    this.moonDisc(x, y, r, theta);
+  }
 
+  private moonDisc(x: number, y: number, r: number, theta: number): void {
+    const { ctx } = this;
     ctx.save();
     ctx.translate(x, y); ctx.rotate(theta);
     // dark side (earthshine)
@@ -416,6 +449,106 @@ export class SkyView {
     ctx.restore();
     ctx.strokeStyle = 'rgba(200,200,180,0.5)'; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832); ctx.stroke();
+  }
+
+  /** '' when the body is plainly visible in the current window, else why it is not. */
+  private hiddenReason(b: BodyState, win: ViewWindow | undefined): '' | 'blocked' | 'outside window' {
+    if (!win) return '';
+    const v = visibility(win, b.az, b.alt, new Date(this.timeMs));
+    return v === 'ok' ? '' : v === 'outside' ? 'outside window' : 'blocked';
+  }
+
+  private drawBodyIcon(x: number, y: number, r: number, b: BodyState): void {
+    if (b.name === 'Moon') { this.moonDisc(x, y, r, this.limbTheta(b, x, y)); return; }
+    const { ctx } = this;
+    ctx.fillStyle = b.color; ctx.beginPath(); ctx.arc(x, y, r * 0.7, 0, 6.2832); ctx.fill();
+  }
+
+  /** Indicator bodies that are up but covered by the ground / a mask: redraw them as a faint outlined disc with a label. */
+  private drawHiddenBodies(win: ViewWindow | undefined): void {
+    const { ctx, cam, tmp } = this;
+    this.bodies.forEach(b => {
+      if (!INDICATOR_BODIES.has(b.name) || b.alt < 0 || !cam.project(b.enu[0], b.enu[1], b.enu[2], tmp)) return;
+      const why = this.hiddenReason(b, win);
+      if (!why) return;
+      const x = tmp[0], y = tmp[1];
+      if (!this.onScreen(x, y, 20)) return;
+      const r = 10;
+      ctx.save();
+      ctx.globalAlpha = 0.6;
+      this.drawBodyIcon(x, y, r, b);
+      ctx.globalAlpha = 0.9;
+      ctx.strokeStyle = 'rgba(235,235,210,0.9)'; ctx.lineWidth = 1.2; ctx.setLineDash([3, 3]);
+      ctx.beginPath(); ctx.arc(x, y, r + 3, 0, 6.2832); ctx.stroke();
+      ctx.restore();
+      const st = { font: '600 12px -apple-system, "Segoe UI", sans-serif', color: b.color, alpha: 0.9, force: true };
+      const txt = `${b.name} \u00b7 ${why}`;
+      if (!this.label(txt, x + r + 7, y, st)) this.label(txt, x - r - 7, y, { ...st, align: 'right' });
+    });
+  }
+
+  /** Edge chip for indicator bodies that are above the horizon but off-screen; tap to pan to them. */
+  private drawBodyIndicators(): void {
+    const { ctx, cam } = this;
+    const W = cam.W, H = cam.H;
+    const p = [0, 0];
+    this.bodies.forEach((b, idx) => {
+      if (!INDICATOR_BODIES.has(b.name) || b.alt < 0) return;
+      cam.projectClamped(b.enu[0], b.enu[1], b.enu[2], p);
+      if (p[0] > 6 && p[0] < W - 6 && p[1] > 6 && p[1] < H - 6) return; // on screen
+      const txt = `${b.name} ${Math.round(b.alt)}\u00b0 ${compass16(b.az)}`;
+      ctx.font = '600 11.5px -apple-system, "Segoe UI", sans-serif';
+      const h = 26, w = ctx.measureText(txt).width + 54;
+      // ray from the canvas centre towards the body, stopped at the (inset) rectangle the chip centre may occupy
+      const dx = p[0] - W / 2, dy = p[1] - H / 2;
+      const xl = 4 + w / 2, xr = W - 4 - w / 2, yt = 54 + h / 2, yb = H * 0.84 - h / 2;
+      const cx0 = W / 2, cy0 = (yt + yb) / 2;
+      const ddy = p[1] - cy0;
+      let t = Infinity;
+      if (dx > 0) t = Math.min(t, (xr - cx0) / dx); else if (dx < 0) t = Math.min(t, (xl - cx0) / dx);
+      if (ddy > 0) t = Math.min(t, (yb - cy0) / ddy); else if (ddy < 0) t = Math.min(t, (yt - cy0) / ddy);
+      if (!isFinite(t)) t = 0;
+      const cx = clamp(cx0 + dx * t, xl, xr);
+      let cy = clamp(cy0 + ddy * t, yt, yb);
+      // keep clear of the window-edge hints and other chips
+      for (let k = 0; k < 4; k++) {
+        const hit = [...this.edgeHints, ...this.bodyChips].find(q => cx - w / 2 < q.x1 && cx + w / 2 > q.x0 && cy - h / 2 < q.y1 && cy + h / 2 > q.y0);
+        if (!hit) break;
+        cy = hit.y0 - h / 2 - 4;
+      }
+      cy = Math.max(cy, yt);
+      const x0 = cx - w / 2, y0 = cy - h / 2;
+      ctx.fillStyle = 'rgba(20,28,44,0.82)';
+      ctx.beginPath(); ctx.roundRect(x0, y0, w, h, 13); ctx.fill();
+      ctx.strokeStyle = 'rgba(235,230,200,0.45)'; ctx.lineWidth = 1; ctx.stroke();
+      // arrow pointing towards the body
+      const ang = Math.atan2(dy, dx), ax = x0 + 14, ay = cy;
+      ctx.save(); ctx.translate(ax, ay); ctx.rotate(ang);
+      ctx.fillStyle = 'rgba(235,235,215,0.95)';
+      ctx.beginPath(); ctx.moveTo(6, 0); ctx.lineTo(-4, -5); ctx.lineTo(-2, 0); ctx.lineTo(-4, 5); ctx.closePath(); ctx.fill();
+      ctx.restore();
+      this.drawBodyIcon(x0 + 32, cy, 7, b);
+      ctx.strokeStyle = 'rgba(200,200,180,0.5)'; ctx.beginPath(); ctx.arc(x0 + 32, cy, 7, 0, 6.2832); ctx.stroke();
+      ctx.fillStyle = '#e8e6d4'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+      ctx.fillText(txt, x0 + 44, cy + 0.5);
+      this.bodyChips.push({ x0: x0 - 4, x1: x0 + w + 4, y0: y0 - 6, y1: y0 + h + 6, idx });
+    });
+  }
+
+  /** Small unobtrusive chip (top-left, under the window buttons) when the Moon is below the horizon. */
+  private drawMoonBelowChip(): void {
+    const b = this.bodies.find(x => x.name === 'Moon');
+    if (!b || b.alt >= 0) return;
+    const ev = this.moonEvent;
+    const nextDay = ev && ev.date.toDateString() !== new Date(this.timeMs).toDateString();
+    const txt = ev ? `Moon below horizon \u00b7 rises ${nextDay ? 'tomorrow ' : ''}${fmtTime(ev.date)} (${compass16(ev.az)})` : 'Moon below horizon';
+    const { ctx } = this;
+    ctx.font = '11px -apple-system, "Segoe UI", sans-serif';
+    const w = ctx.measureText(txt).width + 24, h = 20, x0 = 8, y0 = 52;
+    ctx.fillStyle = 'rgba(20,28,44,0.6)';
+    ctx.beginPath(); ctx.roundRect(x0, y0, w, h, 10); ctx.fill();
+    ctx.fillStyle = 'rgba(200,210,230,0.8)'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillText(txt, x0 + 12, y0 + h / 2 + 0.5);
   }
 
   /** Dim everything outside the selected window's azimuth range / below minAlt (or outside a profile's walls). */
@@ -618,7 +751,7 @@ export class SkyView {
 
   // ── labels ────────────────────────────────────────────────────────────────
 
-  private label(text: string, x: number, y: number, style: { font: string; color: string; align?: CanvasTextAlign; alpha?: number }): boolean {
+  private label(text: string, x: number, y: number, style: { font: string; color: string; align?: CanvasTextAlign; alpha?: number; force?: boolean }): boolean {
     if (style.alpha === 0) return false;
     const { ctx } = this;
     ctx.font = style.font;
@@ -626,7 +759,7 @@ export class SkyView {
     const align = style.align ?? 'left';
     const x0 = align === 'left' ? x : align === 'center' ? x - w / 2 : x - w;
     const rect: [number, number, number, number] = [x0 - 2, y - h / 2, x0 + w + 2, y + h / 2];
-    for (const r of this.labelRects) {
+    if (!style.force) for (const r of this.labelRects) {
       if (rect[0] < r[2] && rect[2] > r[0] && rect[1] < r[3] && rect[3] > r[1]) return false;
     }
     if (rect[0] < 0 || rect[2] > this.cam.W || rect[1] < 0 || rect[3] > this.cam.H) return false;
@@ -651,6 +784,7 @@ export class SkyView {
     // Planets & Moon
     this.bodies.forEach(b => {
       if (b.alt < -1 || !cam.project(b.enu[0], b.enu[1], b.enu[2], tmp)) return;
+      if (INDICATOR_BODIES.has(b.name) && this.hiddenReason(b, win)) return; // labelled by drawHiddenBodies
       const off = b.name === 'Moon' ? 16 : 9;
       this.label(b.name, tmp[0] + off, tmp[1], { font: '600 12px -apple-system, "Segoe UI", sans-serif', color: b.color, alpha: inFrame(b.az, b.alt) });
     });
@@ -834,6 +968,14 @@ export class SkyView {
   // ── tap for info ──────────────────────────────────────────────────────────
 
   private handleTap(x: number, y: number): void {
+    for (const c of this.bodyChips) {
+      if (x >= c.x0 && x <= c.x1 && y >= c.y0 && y <= c.y1) {
+        const b = this.bodies[c.idx];
+        this.setView({ az: b.az, alt: b.alt });
+        this.select({ kind: 'body', i: c.idx });
+        return;
+      }
+    }
     for (const h of this.edgeHints) {
       if (x >= h.x0 && x <= h.x1 && y >= h.y0 && y <= h.y1) { this.panToEdge(h); return; }
     }
