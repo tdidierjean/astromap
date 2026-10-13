@@ -1,5 +1,6 @@
 node_modules/
 dist/
+sw.js
 bun.lock
 
 # horizon-measurement photos show the user's home; keep local only

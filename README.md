@@ -64,6 +64,15 @@ ssh -L 8080:localhost:8080 user@server
 
 Open `http://localhost:8080` in your local browser.
 
+## Install on phone
+
+AstroMap is a PWA and works offline once opened.
+
+- **iPhone / iPad (Safari):** open the site, tap Share, then **Add to Home Screen**.
+- **Android (Chrome):** menu, then **Install app** (or Add to Home screen).
+
+`bun run build` bundles the app and writes `sw.js` with a cache name derived from a hash of the app files, so each deploy is picked up automatically (the page reloads once when a new version takes over). Icons are generated from `icons/*.svg` with `python3 scripts/build_icons.py` (needs Playwright).
+
 ## Configuration
 
 Click **Settings** at the bottom of the page to adjust:

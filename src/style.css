@@ -30,7 +30,7 @@ html, body { height: 100%; }
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 14px 24px;
+  padding: calc(14px + env(safe-area-inset-top, 0px)) 24px 14px;
   background: var(--bg2);
   border-bottom: 1px solid var(--border);
 }
@@ -460,14 +460,15 @@ body[data-tab="sky"] .header, body[data-tab="sky"] .tabs { flex: none; }
 .mag-pop input { height: 28px; }
 
 /* iOS Safari (iOS 26) floats a translucent toolbar over the bottom of the page, and neither 100dvh nor
-   the safe-area inset accounts for it: reserve room under the time panel so the scrubber stays reachable. */
-@supports (-webkit-touch-callout: none) {
+   the safe-area inset accounts for it: reserve room under the time panel so the scrubber stays reachable.
+   Not needed (and wrong) in the installed standalone app, which has no Safari toolbar. */
+@media (display-mode: browser) { @supports (-webkit-touch-callout: none) {
   .sky-controls { padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px) + 56px); }
-}
+} }
 
 /* ── Small screens ── */
 @media (max-width: 600px) {
-  .header { padding: 8px 12px; }
+  .header { padding: calc(8px + env(safe-area-inset-top, 0px)) 12px 8px; }
   .header__subtitle, .header__clock { display: none; }
   .header__title { font-size: 1.1rem; }
   .main { padding: 14px 12px 32px; }

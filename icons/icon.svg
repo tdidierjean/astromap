@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#05070d"/><stop offset="0.7" stop-color="#101a33"/><stop offset="1" stop-color="#1c2b52"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#sky)"/>
+  <g>
+    <!-- crescent moon -->
+    <path d="M318 96a104 104 0 1 0 98 138a84 84 0 1 1 -98 -138z" fill="#f1ecd2"/>
+    <!-- stars -->
+    <path d="M132 150l9 24 24 9-24 9-9 24-9-24-24-9 24-9z" fill="#ffffff"/>
+    <circle cx="206" cy="268" r="9" fill="#cfe0ff"/>
+    <circle cx="96" cy="262" r="7" fill="#cfe0ff"/>
+    <circle cx="392" cy="304" r="8" fill="#cfe0ff"/>
+    <path d="M132 183L206 268L96 262" stroke="#6f93d6" stroke-width="3" fill="none" opacity="0.7"/>
+    <!-- horizon -->
+    <path d="M-60 512V400Q256 330 572 400V512z" fill="#06080d"/>
+    <path d="M-60 400Q256 330 572 400" stroke="#8fb0e8" stroke-width="5" fill="none"/>
+  </g>
+</svg>

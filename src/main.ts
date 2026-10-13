@@ -10,6 +10,7 @@ import {
 import { SkyView, compass16 } from './sky/sky';
 import { leafOn, isVisible, setLeafRefDate } from './horizon';
 import { twilightName } from './sky/palette';
+import { registerServiceWorker } from './pwa';
 
 // Inject object dot styles into <head> once
 (function injectDotStyles() {
@@ -216,3 +217,5 @@ window.addEventListener('load', () => {
 });
 
 window.addEventListener('resize', () => { if (activeTab === 'plan') renderPlan(); });
+
+registerServiceWorker();

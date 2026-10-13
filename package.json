@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Night sky observation planner for apartment observers",
   "scripts": {
-    "build": "bun build src/main.ts --outfile dist/main.js --target browser --format iife",
+    "build": "bun run scripts/build.ts",
     "typecheck": "tsc --noEmit",
     "dev": "bun build src/main.ts --outfile dist/main.js --target browser --format iife --watch"
   },
