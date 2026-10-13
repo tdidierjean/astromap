@@ -1,3 +1,7 @@
 node_modules/
 dist/
 bun.lock
+
+# horizon-measurement photos show the user's home; keep local only
+tools/horizon/photos/
+__pycache__/
