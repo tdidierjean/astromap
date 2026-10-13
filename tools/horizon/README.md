@@ -87,6 +87,42 @@ python3 -m venv venv && venv/bin/pip install numpy scipy astropy pillow
 The real index files are in the `-littleendian` package. The plain `tycho2-10-19` package
 is only a stub. Indexes 10–19 cover 60′–2000′ quads, which is right for ~60° phone fields.
 
+## Triage: is a photo worth solving?
+
+Solving a weak photo on the Pi can burn 10–30 min and still fail, so check first.
+What happened in practice: an eyeball check flagged S3 as risky (few stars) correctly,
+but didn't predict N1/N2 failing. Simple metrics didn't separate them either:
+
+| Photo | Result | Detections (extractor default) | Median flux of 20 brightest |
+|---|---|---|---|
+| A | solved | 449 | 1948 |
+| B | solved | 476 | 1878 |
+| N3 | solved | 393 | 1507 |
+| N4 | solved | 349 | 1106 |
+| S4 | solved | 358 | 1949 |
+| N1 | failed | 104 | 1360 |
+| N2 | failed | **724** | 1113 |
+| S3 | failed | 75 | 740 |
+
+N2 shows that detection counts are polluted by foliage, the finger and haze, so they're not
+a usable threshold on their own. Use these checks instead, cheapest first:
+
+1. **Capture conditions (instant, from the photo + time):** taken after astronomical
+   twilight (sky not visibly blue), 1× camera (pixel scale ~0.03°/px, field ~56×71°),
+   sharp stars (not trailed), no finger or lens flare over the sky. Twilight or 0.5×
+   accounted for all three failures.
+2. **Recognisable pattern (a minute, by eye):** can you name at least one asterism in
+   the frame (Big Dipper, Cassiopeia's W, the Great Square, Summer Triangle) and does it
+   sit where the app predicts for that window and time? Every photo where this was true
+   solved. Doing this also gives a position hint for step 3.
+3. **Quick hinted solve (the real test, ~1 min):** extract stars inside the sky mask,
+   then run `solve-field` with `--ra/--dec/--radius 30` from step 2 and a short CPU limit
+   (`cpulimit 60` in the cfg, or `--cpulimit 60`). If that fails, an unhinted long solve
+   very rarely rescues it. Retake the photo instead.
+
+TODO: add a star-likeness score (fraction of detections with a compact, round PSF of the
+expected width) so step 1 gets a number instead of a judgement call.
+
 ## Lessons learned
 
 **Taking the photos**
@@ -149,7 +185,8 @@ is only a stub. Indexes 10–19 cover 60′–2000′ quads, which is right for 
 5. **Profile generation.** Have a script turn `traces.csv` into `src/data/horizon-*.ts`
    (sort by az, merge photos, flag gaps as estimated, attach leafless fallbacks), instead
    of hand-editing.
-6. **Automatic time check.** Fit the capture time from vertical building edges (they
+6. **Triage command.** `triage.py photo.jpg --window north --time ...`: conditions check, predicted asterisms for that pointing, quick hinted solve with a 60 s limit. Prints go/no-go.
+7. **Automatic time check.** Fit the capture time from vertical building edges (they
    should map to constant azimuth). That removes the need for the user's time when EXIF
    is lost.
-7. **Leaning edges.** Model wall edges as az(alt) polylines instead of a single azimuth.
+8. **Leaning edges.** Model wall edges as az(alt) polylines instead of a single azimuth.
