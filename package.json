@@ -4,6 +4,7 @@
   "description": "Night sky observation planner for apartment observers",
   "scripts": {
     "build": "bun run scripts/build.ts",
+    "preview": "python3 -m http.server 8080 --directory _site",
     "typecheck": "tsc --noEmit",
     "dev": "bun build src/main.ts --outfile dist/main.js --target browser --format iife --watch"
   },

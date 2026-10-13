@@ -40,7 +40,7 @@ bun install
 bun run build
 ```
 
-Then open `index.html` in your browser.
+Then run `bun run preview` and open http://localhost:8080 (serves `_site/`, exactly what gets published). Opening `index.html` directly also works, minus the PWA features.
 
 For development with auto-rebuild on file changes:
 
@@ -71,7 +71,15 @@ AstroMap is a PWA and works offline once opened.
 - **iPhone / iPad (Safari):** open the site, tap Share, then **Add to Home Screen**.
 - **Android (Chrome):** menu, then **Install app** (or Add to Home screen).
 
-`bun run build` bundles the app and writes `sw.js` with a cache name derived from a hash of the app files, so each deploy is picked up automatically (the page reloads once when a new version takes over). Icons are generated from `icons/*.svg` with `python3 scripts/build_icons.py` (needs Playwright).
+Icons are generated from `icons/*.svg` with `python3 scripts/build_icons.py` (needs Playwright).
+
+## Build and deploy
+
+`bun run build` bundles the app and assembles `_site/` (gitignored), which the GitHub Pages workflow uploads as-is.
+
+- **One list:** the published files are listed once, in `scripts/site-files.ts`. The build copies exactly those files into `_site/`, adds `.nojekyll`, and generates `_site/sw.js` whose precache list and cache-version hash derive from the same list, so each deploy is picked up automatically (the page reloads once when a new version takes over).
+- **Adding a file** (e.g. a new icon or script): add its path to `scripts/site-files.ts`. The build fails if a listed file is missing, or if `index.html` / the manifest references a local file that is not listed. It warns about listed files nothing references.
+- **Preview:** `bun run preview` serves `_site/` on http://localhost:8080.
 
 ## Configuration
 

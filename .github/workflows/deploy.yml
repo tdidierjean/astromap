@@ -27,20 +27,9 @@ jobs:
       - name: Install dependencies
         run: bun install
 
+      # bun run build writes _site/ (the files listed in scripts/site-files.ts, plus sw.js and .nojekyll)
       - name: Build
         run: bun run build
-
-      # Publish only the files the app needs (allowlist). Keep in sync with
-      # PRECACHE in scripts/sw.template.js; the step fails if one is missing.
-      - name: Stage site
-        run: |
-          mkdir -p _site/dist _site/src _site/icons
-          cp index.html manifest.webmanifest sw.js _site/
-          cp dist/main.js _site/dist/
-          cp src/style.css _site/src/
-          cp icons/*.png _site/icons/
-          touch _site/.nojekyll
-          find _site -type f | sort
 
       - uses: actions/configure-pages@v5
 

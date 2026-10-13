@@ -1,10 +1,7 @@
-// Service worker template. scripts/build.ts replaces the version placeholder (content hash of the app files) and writes ./sw.js,
+// Service worker template. scripts/build.ts fills in the version and precache placeholders (content hash of the app files) and writes _site/sw.js,
 // so every deploy with changed files produces a byte-different sw.js and the browser installs the new worker.
 const CACHE = 'astromap-__VERSION__';
-const PRECACHE = [
-  './', 'index.html', 'dist/main.js', 'src/style.css', 'manifest.webmanifest',
-  'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png', 'icons/apple-touch-icon.png',
-];
+const PRECACHE = __PRECACHE__; // generated from scripts/site-files.ts
 
 self.addEventListener('install', e => {
   e.waitUntil(
