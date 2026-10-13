@@ -818,7 +818,7 @@ export class SkyView {
     }
 
     // Constellation names (lowest priority)
-    const rankMax = this.view.fov > 110 ? 2 : 3;
+    const rankMax = this.view.fov > 85 ? 2 : 3;
     for (const c of catalog.constellations) {
       if (c.rank > rankMax) continue;
       const x = c.vec[0], y = c.vec[1], z = c.vec[2];

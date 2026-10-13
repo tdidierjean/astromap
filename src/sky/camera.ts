@@ -81,26 +81,16 @@ export function altForHorizon(fov: number, W: number, H: number, frac = 0.92): n
   return clamp(2 * Math.atan(t) / D2R, 0, ALT_MAX);
 }
 
-/** Default framing knobs: horizon at this fraction of the canvas height (0.93 = 7% above the bottom)... */
-export const DEFAULT_HORIZON_FRAC = 0.93;
-/** ...and the top canvas edge showing this altitude (90 = the zenith; lower = tighter, higher fov goes down). */
-export const DEFAULT_TOP_ALT = 90;
+/** Default framing knobs: target horizontal fov (degrees) and the horizon position (fraction of canvas height from the top). */
+export const DEFAULT_HFOV = 100;
+export const DEFAULT_HORIZON_FRAC = 0.92;
 
 /**
- * Default framing for a canvas: the horizon at the view-centre azimuth sits `hFrac` of the way down
- * (0.93 = ~7% above the bottom) and the top edge shows altitude `topAlt`. Derived from the canvas aspect.
+ * Default framing for a canvas: horizontal fov `DEFAULT_HFOV`, with the centre altitude raised so the horizon at the
+ * view-centre azimuth sits at `hFrac` of the canvas height (the top edge may then pass the zenith).
  */
-export function defaultFraming(W: number, H: number, hFrac = DEFAULT_HORIZON_FRAC, topAlt = DEFAULT_TOP_ALT): { alt: number; fov: number } {
-  const want = (hFrac - 0.5) / 0.5; // tan(alt/2) / tan((top-alt)/2)
-  let lo = 0, hi = topAlt;
-  for (let i = 0; i < 40; i++) {
-    const x = (lo + hi) / 2;
-    const f = Math.tan(x * D2R / 2) / Math.tan((topAlt - x) * D2R / 2);
-    if (f < want) lo = x; else hi = x;
-  }
-  const alt = (lo + hi) / 2;
-  const S = (hFrac - 0.5) * H / (2 * Math.tan(alt * D2R / 2));
-  const fov = clamp(4 * Math.atan((W / 2) / (2 * S)) / D2R, 50, FOV_MAX);
+export function defaultFraming(W: number, H: number, hFrac = DEFAULT_HORIZON_FRAC, hfov = DEFAULT_HFOV): { alt: number; fov: number } {
+  const fov = clamp(Math.min(hfov, maxFovForHorizon(W, H, hFrac)), FOV_MIN, FOV_MAX);
   return { alt: altForHorizon(fov, W, H, hFrac), fov };
 }
 
