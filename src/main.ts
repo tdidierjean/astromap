@@ -11,6 +11,7 @@ import { SkyView, compass16 } from './sky/sky';
 import { leafOn, isVisible, setLeafRefDate } from './horizon';
 import { twilightName } from './sky/palette';
 import { registerServiceWorker } from './pwa';
+import { cloudAt, forecastInfo, ensureFresh, onUpdate as onWeather, type Cloud } from './weather';
 
 // Inject object dot styles into <head> once
 (function injectDotStyles() {
@@ -65,13 +66,50 @@ function updateTimeUI(): void {
       const m = sky.moonStatus;
       if (!m) return '';
       return m.up ? ` \u00b7 Moon ${m.pct}% \u00b7 ${Math.round(m.alt)}\u00b0 ${compass16(m.az)}` : ` \u00b7 Moon ${m.pct}% \u00b7 down`;
-    })();
+    })() + cloudText(skyMs);
   $('btn-now').classList.toggle('active', nowMode);
   const tp = $<HTMLInputElement>('time-picker');
   if (document.activeElement !== tp) {
     const d = new Date(skyMs);
     tp.value = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
   }
+}
+
+// ─── Cloud forecast ───────────────────────────────────────────────────────────
+
+/** Strip above the scrubber: x spans thumb-centre to thumb-centre, so a column's time matches the thumb position. */
+function drawClouds(): void {
+  const box = $('cloud-strip'), cv = $<HTMLCanvasElement>('cloud-canvas');
+  const info = forecastInfo();
+  const a = night?.start.date.getTime() ?? 0, b = night?.end.date.getTime() ?? 0;
+  const has = !!night && !!info && [0, .25, .5, .75, 1].some(f => cloudAt(a + f * (b - a)));
+  box.classList.toggle('hidden', !has);
+  if (!has || activeTab !== 'sky') return;
+  $('cloud-note').textContent = info.stale ? `forecast from ${fmtTime(new Date(info.fetchedAt))}` : '';
+  const dpr = window.devicePixelRatio || 1, cssW = cv.clientWidth, cssH = cv.clientHeight;
+  const W = Math.round(cssW * dpr), H = Math.round(cssH * dpr);
+  if (!W) return;
+  cv.width = W; cv.height = H;
+  const ctx = cv.getContext('2d')!;
+  ctx.fillStyle = '#0d1117'; ctx.fillRect(0, 0, W, H);
+  const rows: Array<keyof Cloud> = ['high', 'mid', 'low'], rh = H / 3;
+  for (let x = 0; x < W; x++) {
+    const c = cloudAt(a + (x + 0.5) / W * (b - a));
+    if (!c) continue;
+    rows.forEach((k, r) => {
+      ctx.fillStyle = `rgba(205,215,230,${(0.04 + 0.92 * Math.min(c[k], 100) / 100).toFixed(3)})`;
+      ctx.fillRect(x, Math.round(r * rh), 1, Math.round((r + 1) * rh) - Math.round(r * rh) - Math.round(dpr));
+    });
+  }
+}
+
+/** " · ☁ 35% low" for the status line ('' without data). */
+function cloudText(ms: number): string {
+  const c = cloudAt(ms);
+  if (!c) return '';
+  if (c.total < 10) return ' \u00b7 \u2601 clear';
+  const k = (['low', 'mid', 'high'] as const).reduce((m, l) => (c[l] > c[m] ? l : m), 'low' as 'low' | 'mid' | 'high');
+  return ` \u00b7 \u2601 ${Math.round(c.total)}% ${k}`;
 }
 
 // ─── Refresh ──────────────────────────────────────────────────────────────────
@@ -90,9 +128,11 @@ function refresh(reposition = false): void {
     if (nowMode) skyMs = Date.now();
     else if (reposition || skyMs < a || skyMs > b) skyMs = a + skyFrac * (b - a);
     sky.setNight(night, data);
+    ensureFresh();
     updateCurrent(data, Astronomy.MakeTime(new Date(skyMs)));
     sky.setTime(skyMs);
     updateTimeUI();
+    drawClouds();
     if (activeTab === 'plan') renderPlan();
   }
   buildWindowPills();
@@ -114,7 +154,7 @@ function showTab(tab: 'sky' | 'plan'): void {
   $('view-sky').classList.toggle('hidden', tab !== 'sky');
   $('view-plan').classList.toggle('hidden', tab !== 'plan');
   document.querySelectorAll<HTMLButtonElement>('.tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
-  if (tab === 'plan') renderPlan(); else sky.requestRender();
+  if (tab === 'plan') renderPlan(); else { sky.requestRender(); drawClouds(); }
 }
 
 function buildWindowPills(): void {
@@ -200,6 +240,7 @@ window.addEventListener('load', () => {
   setupSettings(() => { refresh(); });
   setupNightNav(() => { nowMode = false; refresh(true); });
   setupSkyControls();
+  onWeather(() => { drawClouds(); updateTimeUI(); });
   showTab('sky');
   refresh();
   updateClock();
@@ -216,6 +257,6 @@ window.addEventListener('load', () => {
   };
 });
 
-window.addEventListener('resize', () => { if (activeTab === 'plan') renderPlan(); });
+window.addEventListener('resize', () => { drawClouds(); if (activeTab === 'plan') renderPlan(); });
 
 registerServiceWorker();

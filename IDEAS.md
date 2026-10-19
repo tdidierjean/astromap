@@ -8,14 +8,19 @@ Status: 💡 idea · ⭐ recommended next · 🐛 known issue
 
 ## High value
 
-### ⭐ 1. Cloud forecast on the timeline
+### ✅ 1. Cloud forecast on the Sky page (shipped)
 *Inspiration: Clear Outside, Astrospheric.*
-Show hourly low/mid/high cloud cover behind the Gantt timeline and the time
-scrubber, so you can tell at a glance whether tonight is worth looking.
-- Source: Open-Meteo (free, no API key, CORS-friendly). Variables
-  `cloud_cover_low/mid/high`, maybe `visibility` and `relative_humidity_2m`.
-- First online data source in the app: cache the last response, and keep the app
-  fully working offline or when the fetch fails.
+A strip above the time scrubber shows hourly high/mid/low cloud cover for the shown
+night (hour columns line up with the scrubber thumb), and the status line adds
+"☁ 35% low" (or "clear") for the selected time.
+- Source: Open-Meteo (no key, CORS). DWD ICON-D2 (~48 h) where available, default
+  `best_match` for later hours, 7 days. `src/weather.ts`.
+- Last response cached in `localStorage`, refetched at most hourly (and when lat/lon
+  change); offline or on failure the cache is used ("forecast from HH:MM" when stale)
+  and the strip hides when nothing covers the night. The service worker never
+  touches the request.
+- Still open: show it behind the Plan-tab Gantt timeline too; maybe `visibility` and
+  `relative_humidity_2m`.
 
 ### ⭐ 2. ISS and bright satellite passes
 *Inspiration: Heavens-Above.*

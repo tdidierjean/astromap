@@ -14,6 +14,7 @@ Tracks the **Moon, Venus, Mercury, Mars, Jupiter and Saturn**, tells you when ea
 - Constellation lines (dim), asterisms such as the Big Dipper and Summer Triangle (brighter), constellation and star names
 - Planets and the Moon (with phase shading); sky colour follows the Sun's altitude
 - Area outside the window or below the minimum altitude is dimmed; optional az/alt grid
+- Cloud forecast strip (Open-Meteo, hourly high/mid/low cover) above the scrubber plus cloud cover in the status line; cached, hidden when unavailable. This is the only online feature
 - Time scrubber from sunset to sunrise, night navigation, a **Now** button (auto-advances every 30 s); tapping the Gantt timeline on the Plan tab also sets the sky time
 - Drag to pan, pinch / wheel to zoom (field of view 20-150 degrees), double-tap or the reset button to recentre
 - Tap an object (within about 20 px) for name, magnitude, altitude/azimuth and the time spans it is visible in each window tonight
@@ -28,7 +29,7 @@ Tracks the **Moon, Venus, Mercury, Mars, Jupiter and Saturn**, tells you when ea
 - Moon phase display (text description + phase angle)
 - Configurable azimuth viewing windows (e.g. ±45° around North and South)
 - Configurable minimum altitude threshold
-- Runs entirely in the browser — no server, no API calls, no internet required after build
+- Runs entirely in the browser — no server, no internet required after build (the cloud forecast is optional and needs a connection)
 - Settings persist in `localStorage`
 
 ## Setup
@@ -148,6 +149,7 @@ astromap/
 │   ├── config.ts       # Settings + localStorage
 │   ├── format.ts       # Time / moon-phase formatting
 │   ├── state.ts        # Shared night offset
+│   ├── weather.ts      # Open-Meteo cloud forecast + cache
 │   ├── planner.ts      # Plan tab: cards, timeline, panorama, settings
 │   ├── sky/
 │   │   ├── sky.ts      # SkyView: rendering and interaction
