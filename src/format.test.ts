@@ -93,3 +93,10 @@ describe('addLocalDays / nextLocalHour', () => {
     expect(tzOffsetMs(Date.UTC(2026, 0, 15), 'Australia/Sydney')).toBe(11 * H);
   });
 });
+
+import { esc } from './format';
+describe('esc', () => {
+  test('escapes HTML', () => {
+    expect(esc(`<b>x</b> & "y" 'z'`)).toBe('&lt;b&gt;x&lt;/b&gt; &amp; &quot;y&quot; &#39;z&#39;');
+  });
+});

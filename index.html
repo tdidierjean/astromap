@@ -53,6 +53,7 @@
         <input id="lim-mag" class="settings-range" type="range" min="2" max="6" step="0.5">
         <span id="lim-mag-val" class="settings-val">4.0</span>
       </div>
+      <div id="sky-empty" class="sky-empty hidden">No windows &mdash; add one in Settings</div>
       <div id="sky-info" class="sky-info hidden"></div>
     </div>
     <div class="sky-controls">
@@ -136,36 +137,10 @@
             <div class="settings-hint">All times use the location's time zone, whatever the device says</div>
           </div>
 
-          <div class="settings-group">
-            <div class="settings-label">North window</div>
-            <div id="n-profile">
-              <div class="settings-hint" id="n-profile-text">Horizon: measured from photos</div>
-              <button id="n-reset-profile" class="settings-btn" type="button">Reset to simple window</button>
-            </div>
-            <div id="n-simple">
-              <div class="settings-row">
-                <input id="n-half" type="range" min="5" max="90" step="5" class="settings-range">
-                <span id="n-half-val" class="settings-val">&#177;45&deg;</span>
-              </div>
-              <div class="settings-hint" id="n-hint">315&deg; &ndash; 45&deg;</div>
-              <button id="n-restore-profile" class="settings-btn hidden" type="button">Restore measured horizon</button>
-            </div>
-          </div>
-
-          <div class="settings-group">
-            <div class="settings-label">South window</div>
-            <div id="s-profile">
-              <div class="settings-hint" id="s-profile-text">Horizon: measured from photos</div>
-              <button id="s-reset-profile" class="settings-btn" type="button">Reset to simple window</button>
-            </div>
-            <div id="s-simple">
-              <div class="settings-row">
-                <input id="s-half" type="range" min="5" max="90" step="5" class="settings-range">
-                <span id="s-half-val" class="settings-val">&#177;45&deg;</span>
-              </div>
-              <div class="settings-hint" id="s-hint">135&deg; &ndash; 225&deg;</div>
-              <button id="s-restore-profile" class="settings-btn hidden" type="button">Restore measured horizon</button>
-            </div>
+          <div class="settings-group settings-group--wide">
+            <div class="settings-label">Windows</div>
+            <div id="win-list" class="win-list"></div>
+            <button id="win-add" class="settings-btn win-add" type="button">+ Add window</button>
           </div>
 
           <div class="settings-group">

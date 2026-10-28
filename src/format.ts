@@ -124,3 +124,8 @@ export function moonPhaseText(deg: number): string {
   ];
   return labels[Math.round(deg / 45) % 8];
 }
+
+/** Escape user-entered text for use inside innerHTML. */
+export function esc(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}

@@ -7,7 +7,7 @@ import {
   OBJECTS, observer, getHorizon, bodyMagnitude, eqjToEnu, enuToAzAlt, azAltToEnu,
   findVisSpans, sampleFixedStar, type Night, type ObjectData, type Sample,
 } from '../astro';
-import { fmtTime, moonPhaseText } from '../format';
+import { esc, fmtTime, moonPhaseText } from '../format';
 import { Camera, clamp, altForHorizon, defaultFraming, maxFovForHorizon, HORIZON_MIN_FRAC, FOV_MIN, FOV_MAX, ALT_MIN, ALT_MAX, type View } from './camera';
 import { skyColors, rgb, twilightName, twilightLimit, starColor } from './palette';
 
@@ -86,7 +86,7 @@ export class SkyView {
   get currentView(): View { return { ...this.view }; }
 
   setWindow(i: number): void {
-    this.winIdx = clamp(i, 0, config.windows.length - 1);
+    this.winIdx = clamp(i, 0, Math.max(0, config.windows.length - 1));
     this.resetView();
   }
 
@@ -1033,13 +1033,13 @@ export class SkyView {
     const win = config.windows[this.winIdx];
     let when = '';
     if (win && this.night) {
-      const here = this.windowSpans(`${key}|${win.label}`, getSamples, win);
-      if (here) when = `<span class="ok">${win.label} window tonight: ${here}</span>`;
+      const here = this.windowSpans(`${key}|${win.id}`, getSamples, win);
+      if (here) when = `<span class="ok">${esc(win.label)} window tonight: ${here}</span>`;
       else {
         const others = config.windows.filter(w => w !== win)
-          .map(w => ({ w, t: this.windowSpans(`${key}|${w.label}`, getSamples, w) })).filter(o => o.t);
+          .map(w => ({ w, t: this.windowSpans(`${key}|${w.id}`, getSamples, w) })).filter(o => o.t);
         when = others.length
-          ? `Not in the ${win.label} window tonight &mdash; ${others.map(o => `${o.w.label}: ${o.t}`).join('; ')}`
+          ? `Not in the ${esc(win.label)} window tonight &mdash; ${others.map(o => `${esc(o.w.label)}: ${o.t}`).join('; ')}`
           : `Not in any window tonight`;
       }
     }

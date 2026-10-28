@@ -1,9 +1,10 @@
 // Planner UI: visibility cards, Gantt timeline, az/alt panorama, night navigation, settings.
 import * as Astronomy from 'astronomy-engine';
-import { config, saveConfig, DEFAULT_CONFIG, deviceTz, isValidTz, type LeafMode, type ClockMode } from './config';
+import { config, saveConfig, deviceTz, isValidTz, type LeafMode, type ClockMode } from './config';
 import { leafOn, sampleProfile } from './horizon';
-import { fmtTime, fmtHourTick, nightLabel, moonPhaseText, nextLocalHour } from './format';
+import { esc, fmtTime, fmtHourTick, nightLabel, moonPhaseText, nextLocalHour } from './format';
 import { findVisSpans, type ObjectData, type Night } from './astro';
+import { renderWindowList, setupWindowList } from './settings-windows';
 import { state, MIN_OFFSET, MAX_OFFSET } from './state';
 
 // ─── Render: cards ────────────────────────────────────────────────────────────
@@ -18,6 +19,10 @@ export function renderCards(data: ObjectData[], refMs: number, isLive: boolean, 
   const phase    = Astronomy.MoonPhase(Astronomy.MakeTime(new Date(refMs)));
   const phaseStr = moonPhaseText(phase);
 
+  if (!config.windows.length) {
+    document.getElementById('cards')!.innerHTML = '<div class="empty-note">No windows &mdash; add one in Settings</div>';
+    return;
+  }
   document.getElementById('cards')!.innerHTML = data.map(obj => {
     const spans  = obj.visSpans;
     const hasAny = spans.length > 0;
@@ -43,7 +48,7 @@ export function renderCards(data: ObjectData[], refMs: number, isLive: boolean, 
     // Show remaining spans after the primary one
     const rest = spans.filter(s => s !== primary);
     const extras = rest.length > 0
-      ? rest.map(s => `<div class="card__extra">${primary ? 'also' : 'earlier'} ${fmtTime(s.start)}&ndash;${fmtTime(s.end)} (${s.direction})</div>`).join('')
+      ? rest.map(s => `<div class="card__extra">${primary ? 'also' : 'earlier'} ${fmtTime(s.start)}&ndash;${fmtTime(s.end)} (${esc(s.direction)})</div>`).join('')
       : '';
 
     const phaseInfo = obj.name === 'Moon'
@@ -57,7 +62,7 @@ export function renderCards(data: ObjectData[], refMs: number, isLive: boolean, 
           <span class="card__name">${obj.name}</span>
           <span class="card__status ${hasAny ? 'status--yes' : 'status--no'}">${hasAny ? 'VISIBLE' : 'BLOCKED'}</span>
         </div>
-        <div class="card__window">${windowStr}${dirStr ? ` <span class="card__dir">(${dirStr})</span>` : ''}</div>
+        <div class="card__window">${windowStr}${dirStr ? ` <span class="card__dir">(${esc(dirStr)})</span>` : ''}</div>
         <div class="card__pos">${posStr}</div>
         ${phaseInfo}
         ${extras}
@@ -434,29 +439,14 @@ export function setupNightNav(refresh: () => void): void {
 
 export function syncUI(): void {
   const set = (id: string, v: string) => ((document.getElementById(id) as HTMLInputElement).value = v);
-  set('n-half', String(config.windows[0].halfWidth));
-  set('s-half', String(config.windows[1].halfWidth));
   set('min-alt', String(config.minAlt));
   set('lat', String(config.lat));
   set('lon', String(config.lon));
   set('leaf-mode', config.leaf);
   syncTzUI();
   set('clock-mode', config.clock);
-  updateWindowHint('n', config.windows[0].halfWidth);
-  updateWindowHint('s', config.windows[1].halfWidth);
   document.getElementById('min-alt-val')!.textContent = `${config.minAlt}\u00b0`;
-  // Per window: measured profile vs simple window
-  (['n', 's'] as const).forEach((side, i) => {
-    const w = config.windows[i];
-    const prof = w.profile;
-    document.getElementById(`${side}-profile`)!.classList.toggle('hidden', !prof);
-    document.getElementById(`${side}-simple`)!.classList.toggle('hidden', !!prof);
-    document.getElementById(`${side}-restore-profile`)!.classList.toggle('hidden', !w.profileOptOut || !!prof);
-    if (prof) {
-      document.getElementById(`${side}-profile-text`)!.textContent =
-        `Horizon: ${prof.source} (${prof.azMin}\u00b0\u2013${prof.azMax}\u00b0)`;
-    }
-  });
+  renderWindowList();
 }
 
 /** Fill the zone list (once) and select the configured zone; falls back to a text input without Intl.supportedValuesOf. */
@@ -481,16 +471,9 @@ function syncTzUI(): void {
   sel.value = config.tz;
 }
 
-function updateWindowHint(side: 'n' | 's', half: number): void {
-  const center   = side === 'n' ? 0 : 180;
-  const lo       = ((center - half + 360) % 360).toFixed(0);
-  const hi       = ((center + half)       % 360).toFixed(0);
-  document.getElementById(`${side}-half-val`)!.textContent = `\u00b1${half}\u00b0`;
-  document.getElementById(`${side}-hint`)!.textContent     = `${lo}\u00b0 \u2013 ${hi}\u00b0`;
-}
-
-export function setupSettings(refresh: () => void): void {
+export function setupSettings(refresh: () => void, recentre: (id: string) => void): void {
   syncUI();
+  setupWindowList(refresh, recentre);
 
   const on = (id: string, fn: (v: number) => void) => {
     document.getElementById(id)!.addEventListener('input', e => {
@@ -515,21 +498,6 @@ export function setupSettings(refresh: () => void): void {
     config.clock = (e.target as HTMLSelectElement).value as ClockMode;
     saveConfig(); refresh();
   });
-  (['n', 's'] as const).forEach((side, i) => {
-    document.getElementById(`${side}-reset-profile`)!.addEventListener('click', () => {
-      const w = config.windows[i];
-      w.profile = undefined; w.profileOptOut = true; w.azCenter = side === 'n' ? 0 : 180; w.halfWidth = 45;
-      saveConfig(); syncUI(); refresh();
-    });
-    document.getElementById(`${side}-restore-profile`)!.addEventListener('click', () => {
-      const d = DEFAULT_CONFIG.windows[i], w = config.windows[i];
-      w.profile = structuredClone(d.profile); w.profileOptOut = false; w.azCenter = d.azCenter; w.halfWidth = d.halfWidth;
-      saveConfig(); syncUI(); refresh();
-    });
-  });
-
-  on('n-half',  v => { config.windows[0].halfWidth = v; updateWindowHint('n', v); });
-  on('s-half',  v => { config.windows[1].halfWidth = v; updateWindowHint('s', v); });
   on('min-alt', v => { config.minAlt = v; document.getElementById('min-alt-val')!.textContent = `${v}\u00b0`; });
 
   // Lat/lon on change (not input) to avoid partial-number triggers

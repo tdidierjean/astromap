@@ -25,6 +25,8 @@ const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as 
 let night: Night | null = null;
 let data: ObjectData[] = [];
 let sky: SkyView;
+/** Id of the window shown in the sky view (null: none). Indices shift when windows are added, moved or deleted. */
+let selWinId: string | null = null;
 
 // Sky time: either follows the wall clock ("now" mode) or a user-chosen instant.
 let nowMode = true;
@@ -115,6 +117,7 @@ function cloudText(ms: number): string {
 
 /** @param reposition  keep the remembered fraction of the night (after changing nights) */
 function refresh(reposition = false): void {
+  syncSelectedWindow();
   const obs = observer();
   const refDate = new Date(addLocalDays(Date.now(), state.offsetDays));
   night = getNight(refDate, obs);
@@ -135,6 +138,18 @@ function refresh(reposition = false): void {
     if (activeTab === 'plan') renderPlan();
   }
   buildWindowPills();
+}
+
+/** Keep the sky view on the selected window by id; fall back to the first window when it is gone. */
+function syncSelectedWindow(): void {
+  $('sky-empty').classList.toggle('hidden', config.windows.length > 0);
+  let i = config.windows.findIndex(w => w.id === selWinId);
+  if (i < 0) {
+    i = 0;
+    selWinId = config.windows[0]?.id ?? null;
+    if (selWinId) saveWindowId(selWinId);
+  }
+  if (config.windows.length && i !== sky.windowIndex) sky.setWindow(i);
 }
 
 function renderPlan(): void {
@@ -164,7 +179,7 @@ function buildWindowPills(): void {
     b.className = 'pill' + (i === sky.windowIndex ? ' active' : '');
     b.textContent = w.label;
     b.addEventListener('click', () => {
-      sky.setWindow(i); buildWindowPills(); updateTimeUI();
+      selWinId = w.id; sky.setWindow(i); buildWindowPills(); updateTimeUI();
       saveWindowId(w.id);
     });
     box.appendChild(b);
@@ -232,10 +247,10 @@ function updateClock(): void {
 
 window.addEventListener('load', () => {
   sky = new SkyView($<HTMLCanvasElement>('sky'), $('sky-stage'), $('sky-info'));
-  const saved = savedWindowIndex();
-  if (saved > 0) sky.setWindow(saved);
+  selWinId = config.windows[savedWindowIndex()]?.id ?? null;
+  syncSelectedWindow();
 
-  setupSettings(() => { refresh(); });
+  setupSettings(() => { refresh(); }, id => { if (id === selWinId) sky.resetView(); });
   setupNightNav(() => { nowMode = false; refresh(true); });
   setupSkyControls();
   onWeather(() => { drawClouds(); updateTimeUI(); });
@@ -251,7 +266,7 @@ window.addEventListener('load', () => {
     sky, showTab, config, setLeafRef: (ms: number | null) => { setLeafRefDate(ms == null ? null : new Date(ms)); sky.settingsChanged(); updateTimeUI(); },
     isVisible: (w: number, az: number, alt: number, ms: number) => isVisible(config.windows[w], az, alt, new Date(ms)),
     setTime: (ms: number) => setSkyTime(ms),
-    setWindow: (i: number) => { sky.setWindow(i); buildWindowPills(); },
+    setWindow: (i: number) => { selWinId = config.windows[i]?.id ?? null; sky.setWindow(i); buildWindowPills(); },
   };
 });
 
