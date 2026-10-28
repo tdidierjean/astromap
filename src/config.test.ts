@@ -1,0 +1,95 @@
+import { test, expect, describe } from 'bun:test';
+import { migrateConfig, DEFAULT_CONFIG, CONFIG_VERSION, type Config } from './config';
+import { HORIZON_NORTH } from './data/horizon-north';
+import { HORIZON_SOUTH } from './data/horizon-south';
+
+/** A config exactly as the app saved it before versioning (no version, no ids). */
+const v0 = (): any => {
+  const c: any = structuredClone(DEFAULT_CONFIG);
+  delete c.version;
+  for (const w of c.windows) delete w.id;
+  return c;
+};
+
+describe('migrateConfig', () => {
+  test('no saved config -> defaults', () => {
+    expect(migrateConfig(undefined)).toEqual(DEFAULT_CONFIG);
+    expect(migrateConfig(undefined).version).toBe(CONFIG_VERSION);
+  });
+  test('v0 as saved by the app: ids added, profiles intact', () => {
+    const c = migrateConfig(v0());
+    expect(c).toEqual(DEFAULT_CONFIG);
+    expect(c.windows.map(w => w.id)).toEqual(['north', 'south']);
+  });
+  test('v0 with profiles missing: built-ins baked in', () => {
+    const r = v0();
+    for (const w of r.windows) { delete w.profile; w.azCenter = 0; w.halfWidth = 45; }
+    const c = migrateConfig(r);
+    expect(c.windows[0].profile).toEqual(HORIZON_NORTH);
+    expect(c.windows[1].profile).toEqual(HORIZON_SOUTH);
+    expect(c.windows[0].azCenter).toBe(12);
+    expect(c.windows[1].halfWidth).toBe(72.5);
+  });
+  test('v0 with profileOptOut on South: stays simple', () => {
+    const r = v0();
+    delete r.windows[1].profile; r.windows[1].profileOptOut = true; r.windows[1].azCenter = 180; r.windows[1].halfWidth = 45;
+    const c = migrateConfig(r);
+    expect(c.windows[1].profile).toBeUndefined();
+    expect(c.windows[1].profileOptOut).toBe(true);
+    expect(c.windows[1].azCenter).toBe(180);
+    expect(c.windows[0].profile).toEqual(HORIZON_NORTH);
+  });
+  test('v0 user changes preserved', () => {
+    const r = v0(); r.lat = 48.1; r.limitMag = 5.5; r.leaf = 'bare'; r.showGrid = true;
+    const c = migrateConfig(r);
+    expect([c.lat, c.limitMag, c.leaf, c.showGrid]).toEqual([48.1, 5.5, 'bare', true]);
+  });
+  test('v0 missing scalar fields filled from defaults', () => {
+    const c = migrateConfig({ lat: 1, windows: [] });
+    expect(c.lon).toBe(DEFAULT_CONFIG.lon);
+    expect(c.windows).toEqual([]);
+  });
+  test('v0 other windows get generated unique ids, no profile', () => {
+    const c = migrateConfig({ windows: [{ label: 'Balcony', azCenter: 90, halfWidth: 30 }, { label: 'Roof', azCenter: 0, halfWidth: 50 }] });
+    expect(c.windows[0].id).toBeTruthy();
+    expect(c.windows[0].id).not.toBe(c.windows[1].id);
+    expect(c.windows[0].profile).toBeUndefined();
+  });
+  test('v1 round trip', () => {
+    const c = migrateConfig(v0());
+    expect(migrateConfig(JSON.parse(JSON.stringify(c)))).toEqual(c);
+  });
+  test('v1 window without profile stays without profile (even if labelled South)', () => {
+    const c: Config = { ...structuredClone(DEFAULT_CONFIG), windows: [{ id: 'south', label: 'South', azCenter: 170, halfWidth: 40 }] };
+    const m = migrateConfig(JSON.parse(JSON.stringify(c)));
+    expect(m.windows[0].profile).toBeUndefined();
+    expect(m.windows[0].halfWidth).toBe(40);
+  });
+  test('v1 renamed window keeps id and profile', () => {
+    const c = structuredClone(DEFAULT_CONFIG); c.windows[0].label = 'Street side';
+    const m = migrateConfig(JSON.parse(JSON.stringify(c)));
+    expect(m.windows[0].id).toBe('north');
+    expect(m.windows[0].profile).toEqual(HORIZON_NORTH);
+  });
+  test('v1 missing fields filled', () => {
+    const m = migrateConfig({ version: 1, lat: 10, lon: 20 });
+    expect(m.lat).toBe(10);
+    expect(m.minAlt).toBe(DEFAULT_CONFIG.minAlt);
+    expect(m.windows).toEqual(DEFAULT_CONFIG.windows);
+  });
+  test('garbage -> defaults', () => {
+    for (const g of [null, 42, 'x', [], true, undefined]) expect(migrateConfig(g)).toEqual(DEFAULT_CONFIG);
+  });
+  test('wrong field types fall back to defaults', () => {
+    const m = migrateConfig({ lat: 'x', lon: null, leaf: 'nope', showGrid: 1, windows: [5, null, { label: 3 }] });
+    expect(m.lat).toBe(DEFAULT_CONFIG.lat);
+    expect(m.leaf).toBe('auto');
+    expect(m.showGrid).toBe(false);
+    expect(m.windows).toEqual([]);
+  });
+  test('does not mutate DEFAULT_CONFIG', () => {
+    const before = JSON.stringify(DEFAULT_CONFIG);
+    const m = migrateConfig(undefined); m.windows[0].label = 'x'; m.lat = 0;
+    expect(JSON.stringify(DEFAULT_CONFIG)).toBe(before);
+  });
+});

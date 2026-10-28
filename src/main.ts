@@ -1,6 +1,6 @@
 // App entry: wires the planner (Plan tab) and the sky view (Sky tab) together.
 import * as Astronomy from 'astronomy-engine';
-import { config, saveConfig } from './config';
+import { config, saveConfig, savedWindowIndex, saveWindowId } from './config';
 import { TZ, fmtTime, fmtDateTime } from './format';
 import { OBJECTS, observer, getNight, computeData, updateCurrent, type Night, type ObjectData } from './astro';
 import { state } from './state';
@@ -166,7 +166,7 @@ function buildWindowPills(): void {
     b.textContent = w.label;
     b.addEventListener('click', () => {
       sky.setWindow(i); buildWindowPills(); updateTimeUI();
-      try { localStorage.setItem('astromap-window', String(i)); } catch { /* ignore */ }
+      saveWindowId(w.id);
     });
     box.appendChild(b);
   });
@@ -234,8 +234,8 @@ function updateClock(): void {
 
 window.addEventListener('load', () => {
   sky = new SkyView($<HTMLCanvasElement>('sky'), $('sky-stage'), $('sky-info'));
-  const saved = Number(localStorage.getItem('astromap-window'));
-  if (saved > 0 && saved < config.windows.length) sky.setWindow(saved);
+  const saved = savedWindowIndex();
+  if (saved > 0) sky.setWindow(saved);
 
   setupSettings(() => { refresh(); });
   setupNightNav(() => { nowMode = false; refresh(true); });
