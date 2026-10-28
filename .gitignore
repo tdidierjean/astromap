@@ -6,3 +6,6 @@ bun.lock
 tools/horizon/photos/
 __pycache__/
 _site/
+
+# planning notes (ideas, roadmaps); never committed
+internal-docs/
