@@ -118,6 +118,22 @@
                 <input id="lon" type="number" step="0.01" min="-180" max="180" class="settings-input">
               </label>
             </div>
+            <label class="settings-field">
+              Time zone
+              <select id="tz-select" class="settings-input"></select>
+              <input id="tz-text" type="text" class="settings-input hidden" placeholder="Europe/Berlin" autocomplete="off">
+            </label>
+            <button id="tz-device" class="settings-btn" type="button">Use this device's zone</button>
+          </div>
+
+          <div class="settings-group">
+            <div class="settings-label">Clock</div>
+            <select id="clock-mode" class="settings-input">
+              <option value="auto">Auto (browser locale)</option>
+              <option value="24">24-hour</option>
+              <option value="12">12-hour</option>
+            </select>
+            <div class="settings-hint">All times use the location's time zone, whatever the device says</div>
           </div>
 
           <div class="settings-group">

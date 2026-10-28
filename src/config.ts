@@ -28,6 +28,22 @@ export interface ViewWindow {
 }
 
 export type LeafMode = 'auto' | 'leaf' | 'bare';
+export type ClockMode = 'auto' | '24' | '12';
+
+/** Is this a time zone name the runtime understands? */
+export function isValidTz(tz: unknown): tz is string {
+  if (typeof tz !== 'string' || !tz) return false;
+  try { new Intl.DateTimeFormat('en', { timeZone: tz }); return true; } catch { return false; }
+}
+
+/** The device's own IANA zone, or 'UTC' when it cannot be determined. */
+export function deviceTz(): string {
+  try {
+    const z = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (isValidTz(z)) return z;
+  } catch { /* ignore */ }
+  return 'UTC';
+}
 
 /** Current config schema version (saved configs without `version` are v0). */
 export const CONFIG_VERSION = 1;
@@ -37,6 +53,10 @@ export interface Config {
   lat: number;
   lon: number;
   elev: number;
+  /** IANA time zone of the location: all displayed times, hour ticks and "tonight" follow it, not the device. */
+  tz: string;
+  /** Clock style: browser locale default, or forced 24-hour / 12-hour. */
+  clock: ClockMode;
   windows: ViewWindow[];
   minAlt: number;
   /** Naked-eye limiting magnitude for the sky view (stars fainter than this are hidden). */
@@ -52,6 +72,8 @@ export const DEFAULT_CONFIG: Config = {
   lat: 50.74,
   lon: 7.12,
   elev: 60,
+  tz: deviceTz(),
+  clock: 'auto',
   windows: [
     { id: 'north', label: 'North', azCenter: 12, halfWidth: 72, profile: HORIZON_NORTH },
     { id: 'south', label: 'South', azCenter: 163.5, halfWidth: 72.5, profile: HORIZON_SOUTH },
@@ -81,6 +103,8 @@ export function migrateConfig(raw: unknown): Config {
   const cfg: Config = {
     version: CONFIG_VERSION,
     lat: num(raw.lat, def.lat), lon: num(raw.lon, def.lon), elev: num(raw.elev, def.elev),
+    tz: isValidTz(raw.tz) ? raw.tz : def.tz,
+    clock: raw.clock === 'auto' || raw.clock === '24' || raw.clock === '12' ? raw.clock : def.clock,
     windows: def.windows,
     minAlt: num(raw.minAlt, def.minAlt),
     limitMag: num(raw.limitMag, def.limitMag),
@@ -118,7 +142,7 @@ function loadConfig(): Config {
   if (stored) { try { raw = JSON.parse(stored); } catch { /* bad JSON */ } }
   const cfg = migrateConfig(raw);
   // Materialise defaults / migrated configs as the device's own data.
-  if (!isObj(raw) || raw.version !== CONFIG_VERSION) { try { localStorage.setItem(KEY, JSON.stringify(cfg)); } catch { /* ignore */ } }
+  if (!isObj(raw) || raw.version !== CONFIG_VERSION || raw.tz !== cfg.tz || raw.clock !== cfg.clock) { try { localStorage.setItem(KEY, JSON.stringify(cfg)); } catch { /* ignore */ } }
   return cfg;
 }
 

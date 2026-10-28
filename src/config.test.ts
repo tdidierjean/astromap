@@ -1,5 +1,5 @@
 import { test, expect, describe } from 'bun:test';
-import { migrateConfig, DEFAULT_CONFIG, CONFIG_VERSION, type Config } from './config';
+import { migrateConfig, DEFAULT_CONFIG, CONFIG_VERSION, isValidTz, type Config } from './config';
 import { HORIZON_NORTH } from './data/horizon-north';
 import { HORIZON_SOUTH } from './data/horizon-south';
 
@@ -91,5 +91,19 @@ describe('migrateConfig', () => {
     const before = JSON.stringify(DEFAULT_CONFIG);
     const m = migrateConfig(undefined); m.windows[0].label = 'x'; m.lat = 0;
     expect(JSON.stringify(DEFAULT_CONFIG)).toBe(before);
+  });
+});
+
+describe('tz / clock', () => {
+  test('defaults: valid device zone, clock auto', () => {
+    expect(isValidTz(DEFAULT_CONFIG.tz)).toBe(true);
+    expect(DEFAULT_CONFIG.clock).toBe('auto');
+    expect(migrateConfig(undefined).tz).toBe(DEFAULT_CONFIG.tz);
+  });
+  test('valid values kept, invalid replaced by defaults', () => {
+    expect(migrateConfig({ version: 1, tz: 'Asia/Kolkata', clock: '12' })).toMatchObject({ tz: 'Asia/Kolkata', clock: '12' });
+    expect(migrateConfig({ version: 1, tz: 'Mars/Olympus', clock: 'x' })).toMatchObject({ tz: DEFAULT_CONFIG.tz, clock: 'auto' });
+    expect(migrateConfig({ version: 1, tz: 5 }).tz).toBe(DEFAULT_CONFIG.tz);
+    expect(migrateConfig({ version: 1 }).tz).toBe(DEFAULT_CONFIG.tz);
   });
 });

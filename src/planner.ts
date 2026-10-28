@@ -1,8 +1,8 @@
 // Planner UI: visibility cards, Gantt timeline, az/alt panorama, night navigation, settings.
 import * as Astronomy from 'astronomy-engine';
-import { config, saveConfig, DEFAULT_CONFIG, type LeafMode } from './config';
+import { config, saveConfig, DEFAULT_CONFIG, deviceTz, isValidTz, type LeafMode, type ClockMode } from './config';
 import { leafOn, sampleProfile } from './horizon';
-import { fmtTime, nightLabel, moonPhaseText } from './format';
+import { fmtTime, fmtHourTick, nightLabel, moonPhaseText, nextLocalHour } from './format';
 import { findVisSpans, type ObjectData, type Night } from './astro';
 import { state, MIN_OFFSET, MAX_OFFSET } from './state';
 
@@ -102,22 +102,20 @@ export function renderTimeline(data: ObjectData[], night: Night, isCurrent = fal
   ctx.strokeStyle = '#21262d';
   ctx.lineWidth   = 1;
 
-  const firstHour = new Date(t0);
-  firstHour.setMinutes(0, 0, 0);
-  firstHour.setTime(firstHour.getTime() + 3_600_000);
+  const firstHour = nextLocalHour(t0);
 
   const fontSize = Math.min(11, Math.max(9, W / 70));
   ctx.font      = `${fontSize}px monospace`;
   ctx.fillStyle = '#4a5568';
   ctx.textAlign = 'center';
 
-  for (let t = firstHour.getTime(); t < t1; t += 3_600_000) {
+  for (let t = firstHour; t < t1; t += 3_600_000) {
     const x = toX(t);
     ctx.beginPath();
     ctx.moveTo(x, PT);
     ctx.lineTo(x, H - PB);
     ctx.stroke();
-    ctx.fillText(fmtTime(new Date(t)), x, H - PB + 14);
+    ctx.fillText(fmtHourTick(new Date(t)), x, H - PB + 14);
   }
 
   // Object rows
@@ -442,6 +440,8 @@ export function syncUI(): void {
   set('lat', String(config.lat));
   set('lon', String(config.lon));
   set('leaf-mode', config.leaf);
+  syncTzUI();
+  set('clock-mode', config.clock);
   updateWindowHint('n', config.windows[0].halfWidth);
   updateWindowHint('s', config.windows[1].halfWidth);
   document.getElementById('min-alt-val')!.textContent = `${config.minAlt}\u00b0`;
@@ -457,6 +457,28 @@ export function syncUI(): void {
         `Horizon: ${prof.source} (${prof.azMin}\u00b0\u2013${prof.azMax}\u00b0)`;
     }
   });
+}
+
+/** Fill the zone list (once) and select the configured zone; falls back to a text input without Intl.supportedValuesOf. */
+function syncTzUI(): void {
+  const sel = document.getElementById('tz-select') as HTMLSelectElement;
+  const txt = document.getElementById('tz-text') as HTMLInputElement;
+  let zones: string[] = [];
+  try { zones = (Intl as any).supportedValuesOf?.('timeZone') ?? []; } catch { /* unsupported */ }
+  if (!zones.length) {
+    sel.classList.add('hidden'); txt.classList.remove('hidden'); txt.value = config.tz;
+    return;
+  }
+  txt.classList.add('hidden'); sel.classList.remove('hidden');
+  if (!zones.includes(config.tz)) zones = [config.tz, ...zones];
+  if (!zones.includes('UTC')) zones.push('UTC');
+  sel.innerHTML = '';
+  for (const z of zones) {
+    const o = document.createElement('option');
+    o.value = z; o.textContent = z.replace(/_/g, ' ');
+    sel.appendChild(o);
+  }
+  sel.value = config.tz;
 }
 
 function updateWindowHint(side: 'n' | 's', half: number): void {
@@ -480,6 +502,17 @@ export function setupSettings(refresh: () => void): void {
 
   document.getElementById('leaf-mode')!.addEventListener('change', e => {
     config.leaf = (e.target as HTMLSelectElement).value as LeafMode;
+    saveConfig(); refresh();
+  });
+  const setTz = (tz: string) => {
+    if (!isValidTz(tz)) { syncTzUI(); return; }
+    config.tz = tz; saveConfig(); syncTzUI(); refresh();
+  };
+  document.getElementById('tz-select')!.addEventListener('change', e => setTz((e.target as HTMLSelectElement).value));
+  document.getElementById('tz-text')!.addEventListener('change', e => setTz((e.target as HTMLInputElement).value.trim()));
+  document.getElementById('tz-device')!.addEventListener('click', () => setTz(deviceTz()));
+  document.getElementById('clock-mode')!.addEventListener('change', e => {
+    config.clock = (e.target as HTMLSelectElement).value as ClockMode;
     saveConfig(); refresh();
   });
   (['n', 's'] as const).forEach((side, i) => {

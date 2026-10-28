@@ -1,7 +1,7 @@
 // App entry: wires the planner (Plan tab) and the sky view (Sky tab) together.
 import * as Astronomy from 'astronomy-engine';
 import { config, saveConfig, savedWindowIndex, saveWindowId } from './config';
-import { TZ, fmtTime, fmtDateTime } from './format';
+import { fmtTime, fmtDateTime, fmtClock, timeInputValue, localParts, localToMs, addLocalDays } from './format';
 import { OBJECTS, observer, getNight, computeData, updateCurrent, type Night, type ObjectData } from './astro';
 import { state } from './state';
 import {
@@ -70,8 +70,7 @@ function updateTimeUI(): void {
   $('btn-now').classList.toggle('active', nowMode);
   const tp = $<HTMLInputElement>('time-picker');
   if (document.activeElement !== tp) {
-    const d = new Date(skyMs);
-    tp.value = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    tp.value = timeInputValue(skyMs);
   }
 }
 
@@ -117,7 +116,7 @@ function cloudText(ms: number): string {
 /** @param reposition  keep the remembered fraction of the night (after changing nights) */
 function refresh(reposition = false): void {
   const obs = observer();
-  const refDate = new Date(Date.now() + state.offsetDays * 86_400_000);
+  const refDate = new Date(addLocalDays(Date.now(), state.offsetDays));
   night = getNight(refDate, obs);
   updateNightNav(night);
 
@@ -219,7 +218,8 @@ function setupSkyControls(): void {
     const [h, m] = (e.target as HTMLInputElement).value.split(':').map(Number);
     if (Number.isNaN(h) || Number.isNaN(m)) return;
     const a = night.start.date.getTime(), b = night.end.date.getTime();
-    const cands = [0, 1].map(k => { const d = new Date(a); d.setDate(d.getDate() + k); d.setHours(h, m, 0, 0); return d.getTime(); });
+    const pa = localParts(a);
+    const cands = [0, 1].map(k => localToMs(pa.y, pa.m, pa.d + k, h, m));
     const hit = cands.find(t => t >= a && t <= b) ?? (Math.abs(cands[0] - a) < Math.abs(cands[1] - a) ? cands[0] : cands[1]);
     setSkyTime(Math.min(Math.max(hit, a), b));
   });
@@ -227,9 +227,7 @@ function setupSkyControls(): void {
 }
 
 function updateClock(): void {
-  $('clock').textContent = new Date().toLocaleTimeString('de-DE', {
-    timeZone: TZ, hour: '2-digit', minute: '2-digit', second: '2-digit',
-  });
+  $('clock').textContent = fmtClock(new Date());
 }
 
 window.addEventListener('load', () => {
