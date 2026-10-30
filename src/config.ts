@@ -1,7 +1,6 @@
 // Persistent user configuration (localStorage) and shared type definitions.
 
-import { HORIZON_SOUTH } from './data/horizon-south';
-import { HORIZON_NORTH } from './data/horizon-north';
+import { DEMO_CONFIG, DEMO_TZ } from './demo';
 
 /** building: always blocks; tree: deciduous (blocks in leaf, `bare` = roofline behind it);
  *  conifer: always blocks; estimated: unmeasured stretch, assumed. */
@@ -50,6 +49,8 @@ export const CONFIG_VERSION = 1;
 
 export interface Config {
   version: number;
+  /** Place name shown in the header; empty: the coordinates are shown instead. */
+  name: string;
   lat: number;
   lon: number;
   elev: number;
@@ -67,22 +68,30 @@ export interface Config {
   leaf: LeafMode;
 }
 
+/** Neutral starting point (no place, no windows): what a visitor without a saved config begins with, before onboarding
+ *  fills it in. Missing fields of v1 configs are filled from here. */
 export const DEFAULT_CONFIG: Config = {
   version: CONFIG_VERSION,
-  lat: 50.74,
-  lon: 7.12,
-  elev: 60,
+  name: '',
+  lat: 0,
+  lon: 0,
+  elev: 0,
   tz: deviceTz(),
   clock: 'auto',
-  windows: [
-    { id: 'north', label: 'North', azCenter: 12, halfWidth: 72, profile: HORIZON_NORTH },
-    { id: 'south', label: 'South', azCenter: 163.5, halfWidth: 72.5, profile: HORIZON_SOUTH },
-  ],
+  windows: [],
   minAlt: 10,
   limitMag: 4.0,
   showGrid: false,
   leaf: 'auto',
 };
+
+/** What legacy (v0) configs are completed from: the Bonn balcony the app was first built for (device zone, as before). */
+const LEGACY_BASE: Config = { ...structuredClone(DEMO_CONFIG), version: CONFIG_VERSION, tz: deviceTz() };
+
+/** The demo as a full config (fresh copy). */
+export function demoConfig(): Config {
+  return { ...structuredClone(DEMO_CONFIG), version: CONFIG_VERSION, tz: DEMO_TZ };
+}
 
 /** Short random id for a new window. */
 export function newWindowId(): string {
@@ -93,15 +102,16 @@ const isObj = (x: unknown): x is Record<string, unknown> => typeof x === 'object
 const num = (x: unknown, d: number) => (typeof x === 'number' && Number.isFinite(x) ? x : d);
 
 /** Migrate parsed JSON (any version, or garbage) to a valid current Config. Pure: no storage access.
- *  v0 (no `version`): North/South windows without a profile (and no opt-out) get the built-in measured
- *  profile baked in once. v1+: profiles are ordinary user data; only missing fields are filled. */
+ *  v0 (no `version`): missing fields come from the Bonn preset, and North/South windows without a profile
+ *  (and no opt-out) get the built-in measured profile baked in once. v1+: profiles are ordinary user data; only missing fields are filled from the neutral DEFAULT_CONFIG. */
 export function migrateConfig(raw: unknown): Config {
-  const def = structuredClone(DEFAULT_CONFIG);
-  if (!isObj(raw)) return def;
+  if (!isObj(raw)) return structuredClone(DEFAULT_CONFIG);
   const v0 = raw.version === undefined;
+  const def = structuredClone(v0 ? LEGACY_BASE : DEFAULT_CONFIG);
   const leaf: LeafMode = raw.leaf === 'auto' || raw.leaf === 'leaf' || raw.leaf === 'bare' ? raw.leaf : def.leaf;
   const cfg: Config = {
     version: CONFIG_VERSION,
+    name: typeof raw.name === 'string' ? raw.name.trim().slice(0, 80) : def.name,
     lat: num(raw.lat, def.lat), lon: num(raw.lon, def.lon), elev: num(raw.elev, def.elev),
     tz: isValidTz(raw.tz) ? raw.tz : def.tz,
     clock: raw.clock === 'auto' || raw.clock === '24' || raw.clock === '12' ? raw.clock : def.clock,
@@ -116,7 +126,7 @@ export function migrateConfig(raw: unknown): Config {
   cfg.windows = [];
   for (const r of raw.windows) {
     if (!isObj(r) || typeof r.label !== 'string') continue;
-    const builtin = v0 ? DEFAULT_CONFIG.windows.find(d => d.label === r.label) : undefined;
+    const builtin = v0 ? LEGACY_BASE.windows.find(d => d.label === r.label) : undefined;
     const w: ViewWindow = {
       id: '', label: r.label,
       azCenter: num(r.azCenter, builtin?.azCenter ?? 0), halfWidth: num(r.halfWidth, builtin?.halfWidth ?? 45),
@@ -136,12 +146,27 @@ export function migrateConfig(raw: unknown): Config {
 
 const KEY = 'astromap-config';
 
+/** Demo mode (URL hash `#demo`): the Bonn preset lives in memory only; nothing is read from or written to storage. */
+export const demoMode: boolean = typeof location !== 'undefined' && location.hash === '#demo';
+
+/** A usable config is stored on this device (false on first run, or when the stored data is unreadable). */
+export const hasStoredConfig: boolean = (() => {
+  try {
+    const s = localStorage.getItem(KEY);
+    return !!s && isObj(JSON.parse(s));
+  } catch { return false; }
+})();
+
+/** First run: no stored config, so onboarding sets the place up. Never in demo mode. */
+export const needsOnboarding: boolean = !demoMode && !hasStoredConfig;
+
 function loadConfig(): Config {
-  let stored: string | null = null, raw: unknown;
-  try { stored = localStorage.getItem(KEY); } catch { /* no localStorage */ }
-  if (stored) { try { raw = JSON.parse(stored); } catch { /* bad JSON */ } }
+  if (demoMode) return demoConfig();
+  if (!hasStoredConfig) return structuredClone(DEFAULT_CONFIG); // saved by onboarding, not before
+  let raw: unknown;
+  try { raw = JSON.parse(localStorage.getItem(KEY)!); } catch { /* unreachable: hasStoredConfig parsed it */ }
   const cfg = migrateConfig(raw);
-  // Materialise defaults / migrated configs as the device's own data.
+  // Materialise migrated configs as the device's own data.
   if (!isObj(raw) || raw.version !== CONFIG_VERSION || raw.tz !== cfg.tz || raw.clock !== cfg.clock) { try { localStorage.setItem(KEY, JSON.stringify(cfg)); } catch { /* ignore */ } }
   return cfg;
 }
@@ -149,12 +174,14 @@ function loadConfig(): Config {
 export const config: Config = loadConfig();
 
 export function saveConfig(): void {
+  if (demoMode) return;
   try { localStorage.setItem(KEY, JSON.stringify(config)); } catch { /* ignore */ }
 }
 
 const WIN_KEY = 'astromap-window';
 /** Index of the saved sky window: stored by id; the old numeric index is accepted as fallback. */
 export function savedWindowIndex(): number {
+  if (demoMode) return 0;
   try {
     const s = localStorage.getItem(WIN_KEY);
     if (s == null) return 0;
@@ -165,5 +192,6 @@ export function savedWindowIndex(): number {
   } catch { return 0; }
 }
 export function saveWindowId(id: string): void {
+  if (demoMode) return;
   try { localStorage.setItem(WIN_KEY, id); } catch { /* ignore */ }
 }

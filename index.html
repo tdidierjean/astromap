@@ -14,10 +14,15 @@
   <link rel="stylesheet" href="src/style.css">
 </head>
 <body>
+  <div id="demo-banner" class="demo-banner hidden" role="status">
+    <span class="demo-banner__text"><strong>Demo</strong> &mdash; Bonn-Beuel balcony. Changes are not saved.</span>
+    <button id="demo-setup" class="demo-banner__btn" type="button">Set up my own</button>
+    <button id="demo-exit" class="demo-banner__btn" type="button">Exit demo</button>
+  </div>
   <header class="header">
     <div class="header__left">
       <h1 class="header__title">AstroMap</h1>
-      <span class="header__subtitle" id="location-label">Bonn-Beuel</span>
+      <span class="header__subtitle" id="location-label"></span>
     </div>
     <div class="header__right">
       <span id="clock" class="header__clock">--:--:--</span>
@@ -109,6 +114,10 @@
 
           <div class="settings-group">
             <div class="settings-label">Location</div>
+            <label class="settings-field">
+              Name
+              <input id="loc-name" type="text" class="settings-input settings-input--grow" maxlength="80" placeholder="optional" autocomplete="off">
+            </label>
             <div class="settings-row">
               <label class="settings-field">
                 Lat&deg;
@@ -160,6 +169,11 @@
               <span id="min-alt-val" class="settings-val">10&deg;</span>
             </div>
             <div class="settings-hint">Objects below this altitude are ignored (windows without a measured horizon)</div>
+          </div>
+
+          <div class="settings-group settings-group--wide" id="demo-link-group">
+            <div class="settings-label">About</div>
+            <div class="settings-hint">Curious how it looks with a measured horizon? <a href="#demo" id="demo-link" class="settings-link">Try the demo</a> (Bonn-Beuel balcony; your saved setup is not touched)</div>
           </div>
 
         </div>

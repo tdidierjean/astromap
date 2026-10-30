@@ -1,5 +1,6 @@
 // Settings: the editable list of viewing windows (one card per window).
-import { config, saveConfig, DEFAULT_CONFIG, type ViewWindow } from './config';
+import { config, saveConfig, type ViewWindow } from './config';
+import { DEMO_CONFIG } from './demo';
 import {
   COMPASS16, pointAz, pointIndex, parseDegrees, rangeHint, newSimpleWindow, seedFromProfile, moveWindow,
 } from './windows';
@@ -85,8 +86,8 @@ function cardFor(w: ViewWindow, i: number): HTMLElement {
     const row = el('div', 'settings-row'); row.append(half, halfVal);
     card.append(faces, row, hint);
 
-    // Built-in measured horizon (matched by id) can be brought back after a reset
-    const builtin = DEFAULT_CONFIG.windows.find(d => d.id === w.id && d.profile);
+    // Measured horizon of the demo preset (matched by id) can be brought back after a reset
+    const builtin = DEMO_CONFIG.windows.find(d => d.id === w.id && d.profile);
     if (builtin && w.profileOptOut) {
       card.append(btn('Restore measured horizon', 'Restore measured horizon', () => {
         w.profile = structuredClone(builtin.profile); w.profileOptOut = false;

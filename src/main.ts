@@ -1,6 +1,8 @@
 // App entry: wires the planner (Plan tab) and the sky view (Sky tab) together.
 import * as Astronomy from 'astronomy-engine';
-import { config, saveConfig, savedWindowIndex, saveWindowId } from './config';
+import { config, saveConfig, savedWindowIndex, saveWindowId, needsOnboarding } from './config';
+import { startOnboarding } from './onboarding';
+import { setupDemoMode } from './demo-mode';
 import { fmtTime, fmtDateTime, fmtClock, timeInputValue, localParts, localToMs, addLocalDays } from './format';
 import { OBJECTS, observer, getNight, computeData, updateCurrent, type Night, type ObjectData } from './astro';
 import { state } from './state';
@@ -246,6 +248,9 @@ function updateClock(): void {
 }
 
 window.addEventListener('load', () => {
+  setupDemoMode();
+  // First run: the overlay saves the config and reloads; nothing else is started (no forecast fetch for a placeholder location).
+  if (needsOnboarding) { startOnboarding(); return; }
   sky = new SkyView($<HTMLCanvasElement>('sky'), $('sky-stage'), $('sky-info'));
   selWinId = config.windows[savedWindowIndex()]?.id ?? null;
   syncSelectedWindow();

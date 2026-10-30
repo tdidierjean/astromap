@@ -1,6 +1,6 @@
 // Cloud-cover forecast from Open-Meteo (no key). DWD ICON-D2 (~48 h, high-res) wins where present, the default best_match model fills the rest.
 // Cached in localStorage; every failure is swallowed so the app keeps working offline.
-import { config } from './config';
+import { config, demoMode } from './config';
 
 export interface Cloud { low: number; mid: number; high: number; total: number; }
 interface Forecast { lat: number; lon: number; fetchedAt: number; t0: number; low: number[]; mid: number[]; high: number[]; tot: number[]; }
@@ -77,7 +77,7 @@ export function ensureFresh(): void {
       if (n < 2 || time[1] - time[0] !== 3600 || out.low.every(Number.isNaN)) throw new Error('bad shape');
       // JSON turns NaN into null; the loaders treat null as NaN (Number.isFinite(null) is false)
       fc = out;
-      try { localStorage.setItem(KEY, JSON.stringify(out)); } catch { /* ignore */ }
+      if (!demoMode) try { localStorage.setItem(KEY, JSON.stringify(out)); } catch { /* ignore */ }
       notify();
     })
     .catch(() => { /* offline or API trouble: keep whatever we have */ })

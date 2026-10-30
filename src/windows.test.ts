@@ -1,6 +1,7 @@
 import { test, expect, describe } from 'bun:test';
 import { pointAz, pointIndex, parseDegrees, rangeHint, defaultWindowName, newSimpleWindow, seedFromProfile, moveWindow, COMPASS16 } from './windows';
-import { DEFAULT_CONFIG, type ViewWindow, type HorizonProfile } from './config';
+import { type ViewWindow, type HorizonProfile } from './config';
+import { DEMO_CONFIG } from './demo';
 
 const win = (id: string, label = id): ViewWindow => ({ id, label, azCenter: 0, halfWidth: 45 });
 const prof = (azMin: number, azMax: number): HorizonProfile => ({ azMin, azMax, points: [], source: 't' });
@@ -50,7 +51,7 @@ describe('naming and creation', () => {
 
 describe('seedFromProfile', () => {
   test('keeps the direction of the built-in windows', () => {
-    const south = DEFAULT_CONFIG.windows[1].profile!, north = DEFAULT_CONFIG.windows[0].profile!;
+    const south = DEMO_CONFIG.windows[1].profile!, north = DEMO_CONFIG.windows[0].profile!;
     const s = seedFromProfile(south), n = seedFromProfile(north);
     expect(Math.abs(s.azCenter - 163.5)).toBeLessThanOrEqual(1);
     expect(Math.abs(n.azCenter - 12)).toBeLessThanOrEqual(1);

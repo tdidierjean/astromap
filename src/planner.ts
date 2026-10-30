@@ -1,6 +1,7 @@
 // Planner UI: visibility cards, Gantt timeline, az/alt panorama, night navigation, settings.
 import * as Astronomy from 'astronomy-engine';
 import { config, saveConfig, deviceTz, isValidTz, type LeafMode, type ClockMode } from './config';
+import { locationLabel } from './location';
 import { leafOn, sampleProfile } from './horizon';
 import { esc, fmtTime, fmtHourTick, nightLabel, moonPhaseText, nextLocalHour } from './format';
 import { findVisSpans, type ObjectData, type Night } from './astro';
@@ -437,11 +438,18 @@ export function setupNightNav(refresh: () => void): void {
 
 // ─── Settings ─────────────────────────────────────────────────────────────────
 
+/** Header label: place name (set as text, so it needs no escaping) or coordinates. */
+export function updateLocationLabel(): void {
+  document.getElementById('location-label')!.textContent = locationLabel(config);
+}
+
 export function syncUI(): void {
   const set = (id: string, v: string) => ((document.getElementById(id) as HTMLInputElement).value = v);
   set('min-alt', String(config.minAlt));
   set('lat', String(config.lat));
   set('lon', String(config.lon));
+  set('loc-name', config.name);
+  updateLocationLabel();
   set('leaf-mode', config.leaf);
   syncTzUI();
   set('clock-mode', config.clock);
@@ -500,6 +508,12 @@ export function setupSettings(refresh: () => void, recentre: (id: string) => voi
   });
   on('min-alt', v => { config.minAlt = v; document.getElementById('min-alt-val')!.textContent = `${v}\u00b0`; });
 
+  document.getElementById('loc-name')!.addEventListener('change', e => {
+    config.name = (e.target as HTMLInputElement).value.trim();
+    updateLocationLabel();
+    saveConfig();
+  });
+
   // Lat/lon on change (not input) to avoid partial-number triggers
   ['lat', 'lon'].forEach(id =>
     document.getElementById(id)!.addEventListener('change', e => {
@@ -507,7 +521,7 @@ export function setupSettings(refresh: () => void, recentre: (id: string) => voi
       if (isNaN(v)) return;
       if (id === 'lat') config.lat = v;
       else              config.lon = v;
-      document.getElementById('location-label')!.textContent = `${config.lat}\u00b0N, ${config.lon}\u00b0E`;
+      updateLocationLabel();
       saveConfig();
       refresh();
     })
