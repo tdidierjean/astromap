@@ -171,6 +171,17 @@
             <div class="settings-hint">Objects below this altitude are ignored (windows without a measured horizon)</div>
           </div>
 
+          <div class="settings-group settings-group--wide">
+            <div class="settings-label">Backup</div>
+            <div class="settings-row">
+              <button id="export-config" class="settings-btn" type="button">Export settings</button>
+              <button id="import-btn" class="settings-btn" type="button">Import&hellip;</button>
+              <input id="import-file" type="file" accept=".json,application/json" class="hidden">
+            </div>
+            <div id="transfer-msg" class="settings-hint" role="status"></div>
+            <div class="settings-hint">A file with your place and all windows, or a single window. Use it to move to a new phone or share a horizon.</div>
+          </div>
+
           <div class="settings-group settings-group--wide" id="demo-link-group">
             <div class="settings-label">About</div>
             <div class="settings-hint">Curious how it looks with a measured horizon? <a href="#demo" id="demo-link" class="settings-link">Try the demo</a> (Bonn-Beuel balcony; your saved setup is not touched)</div>

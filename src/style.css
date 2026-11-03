@@ -503,6 +503,8 @@ body[data-tab="sky"] .header, body[data-tab="sky"] .tabs { flex: none; }
 .win-card__actions .win-del { margin-left: auto; }
 .settings-btn:disabled { opacity: 0.4; cursor: default; }
 .win-add { align-self: flex-start; }
+.settings-msg--err { color: var(--red-t); }
+.win-card--new { border-color: var(--accent); }
 .empty-note { grid-column: 1 / -1; color: var(--muted); font-size: 0.85rem; padding: 14px; text-align: center; border: 1px dashed var(--border); border-radius: 8px; }
 .sky-empty {
   position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);

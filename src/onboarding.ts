@@ -1,5 +1,7 @@
 // First-run onboarding: a full-screen overlay that sets up the place (step 1) and the first window (step 2).
 import { config, saveConfig, deviceTz } from './config';
+import { parseTransfer } from './transfer';
+import { readImportFile } from './transfer-ui';
 import { COMPASS16, pointAz, newSimpleWindow, rangeHint } from './windows';
 import { round2, formatCoords, parseLat, parseLon, searchPlaces, lookupElevation, type Place } from './location';
 import { enterDemo } from './demo-mode';
@@ -55,6 +57,24 @@ export function startOnboarding(): void {
       setMsg(note);
     };
 
+    // Restore a setup exported from another device; saves and reloads like finishing the onboarding
+    const file = el('input'); file.type = 'file'; file.accept = '.json,application/json'; file.className = 'hidden';
+    file.setAttribute('aria-label', 'Settings file');
+    file.addEventListener('change', async () => {
+      const f = file.files?.[0];
+      file.value = '';
+      if (!f) return;
+      const text = await readImportFile(f).catch(() => null);
+      const r = text === null ? null : parseTransfer(text);
+      if (!r) { setMsg('Could not read that file (too large or unreadable).', true); return; }
+      if (!r.ok) { setMsg(r.error, true); return; }
+      if (r.kind !== 'config') { setMsg('That file holds a single window. Set up your place first, then import it in Settings.', true); return; }
+      Object.assign(config, r.config);
+      saveConfig();
+      location.reload();
+    });
+    const restore = button('Import settings from a file', 'ob-link', () => file.click());
+
     const demo = button('Just look around: try the demo', 'ob-btn--demo', enterDemo);
 
     const geo = button('Use my location', '', () => {
@@ -105,7 +125,7 @@ export function startOnboarding(): void {
       field('Your location', geo),
       field('Or search a place', qrow), hits,
       field('Or enter coordinates', crow), name,
-      msg, next,
+      msg, next, restore, file,
     );
   }
 

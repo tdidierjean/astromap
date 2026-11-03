@@ -1,12 +1,16 @@
 // Settings: the editable list of viewing windows (one card per window).
 import { config, saveConfig, type ViewWindow } from './config';
 import { DEMO_CONFIG } from './demo';
+import { serializeWindow, windowFilename } from './transfer';
+import { exportFile } from './transfer-ui';
 import {
   COMPASS16, pointAz, pointIndex, parseDegrees, rangeHint, newSimpleWindow, seedFromProfile, moveWindow,
 } from './windows';
 
 let onChange: (id?: string) => void = () => {};
 let onFacing: (id: string) => void = () => {};
+/** Status line of the Backup group (also used for per-window export). */
+let say: (text: string, err?: boolean) => void = () => {};
 
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', text = ''): HTMLElementTagNameMap[K] => {
   const e = document.createElement(tag);
@@ -108,7 +112,8 @@ function cardFor(w: ViewWindow, i: number): HTMLElement {
     commit(); renderWindowList();
   }, 'settings-btn win-del');
   del.disabled = config.windows.length <= 1;
-  acts.append(up, down, del);
+  const exp = btn('Export', 'Export window', () => { void exportFile(windowFilename(w), serializeWindow(w)).then(m => say(m)); }, 'settings-btn win-export');
+  acts.append(up, down, exp, del);
   card.append(acts);
   return card;
 }
@@ -126,10 +131,21 @@ export function renderWindowList(focusId?: string, sel?: string): void {
   }
 }
 
+/** Append an imported window (already validated, id unique), save it and focus its card. */
+export function addImportedWindow(w: ViewWindow): void {
+  config.windows.push(w);
+  commit(w.id); renderWindowList();
+  const card = [...document.querySelectorAll<HTMLElement>('#win-list .win-card')].find(c => c.dataset.id === w.id);
+  card?.classList.add('win-card--new');
+  card?.scrollIntoView({ block: 'center' });
+  card?.querySelector<HTMLInputElement>('.win-card__name')?.focus({ preventScroll: true });
+}
+
 /** @param refresh  re-render pills, sky view and Plan tab
- *  @param recentre called with a window id after its facing changed (the sky view re-centres if it shows it) */
-export function setupWindowList(refresh: () => void, recentre: (id: string) => void): void {
-  onChange = refresh; onFacing = recentre;
+ *  @param recentre called with a window id after its facing changed (the sky view re-centres if it shows it)
+ *  @param status   shows a message in the Backup group */
+export function setupWindowList(refresh: () => void, recentre: (id: string) => void, status: (text: string, err?: boolean) => void): void {
+  onChange = refresh; onFacing = recentre; say = status;
   document.getElementById('win-add')!.addEventListener('click', () => {
     const w = newSimpleWindow(config.windows, config.lat);
     config.windows.push(w);

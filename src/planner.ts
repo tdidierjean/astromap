@@ -1,11 +1,13 @@
 // Planner UI: visibility cards, Gantt timeline, az/alt panorama, night navigation, settings.
 import * as Astronomy from 'astronomy-engine';
-import { config, saveConfig, deviceTz, isValidTz, type LeafMode, type ClockMode } from './config';
+import { config, saveConfig, deviceTz, demoMode, isValidTz, type LeafMode, type ClockMode } from './config';
 import { locationLabel } from './location';
 import { leafOn, sampleProfile } from './horizon';
 import { esc, fmtTime, fmtHourTick, nightLabel, moonPhaseText, nextLocalHour } from './format';
 import { findVisSpans, type ObjectData, type Night } from './astro';
-import { renderWindowList, setupWindowList } from './settings-windows';
+import { renderWindowList, setupWindowList, addImportedWindow } from './settings-windows';
+import { parseTransfer, serializeConfig, configFilename, withFreshId } from './transfer';
+import { exportFile, readImportFile } from './transfer-ui';
 import { state, MIN_OFFSET, MAX_OFFSET } from './state';
 
 // ─── Render: cards ────────────────────────────────────────────────────────────
@@ -479,9 +481,41 @@ function syncTzUI(): void {
   sel.value = config.tz;
 }
 
+/** Export / import of the whole config or a single window (file format: transfer.ts). */
+function setupTransfer(refresh: () => void, say: (text: string, err?: boolean) => void): void {
+  const input = document.getElementById('import-file') as HTMLInputElement;
+  document.getElementById('export-config')!.addEventListener('click', () => {
+    void exportFile(configFilename(config), serializeConfig(config)).then(m => say(m));
+  });
+  document.getElementById('import-btn')!.addEventListener('click', () => input.click());
+  input.addEventListener('change', async () => {
+    const file = input.files?.[0];
+    input.value = ''; // picking the same file again must fire `change` again
+    if (!file) return;
+    const text = await readImportFile(file).catch(() => null);
+    const r = text === null ? null : parseTransfer(text);
+    if (!r) { say('Could not read that file (too large or unreadable).', true); return; }
+    if (!r.ok) { say(r.error, true); return; }
+    if (r.kind === 'window') {
+      addImportedWindow(withFreshId(r.window, config.windows));
+      say(`Added window "${r.window.label}".`);
+      return;
+    }
+    const n = r.config.windows.length;
+    if (!confirm(`Replace your place and all ${config.windows.length} window${config.windows.length === 1 ? '' : 's'} with the imported settings (${n} window${n === 1 ? '' : 's'})?`)) return;
+    // In demo mode this stays in memory: saveConfig is a no-op there and the banner still says nothing is saved.
+    Object.assign(config, r.config);
+    saveConfig(); syncUI(); refresh();
+    say(demoMode ? 'Imported for this demo session only (not saved).' : `Imported ${locationLabel(config)} with ${n} window${n === 1 ? '' : 's'}.`);
+  });
+}
+
 export function setupSettings(refresh: () => void, recentre: (id: string) => void): void {
   syncUI();
-  setupWindowList(refresh, recentre);
+  const msg = document.getElementById('transfer-msg')!;
+  const say = (text: string, err = false) => { msg.textContent = text; msg.classList.toggle('settings-msg--err', err); };
+  setupWindowList(refresh, recentre, say);
+  setupTransfer(refresh, say);
 
   const on = (id: string, fn: (v: number) => void) => {
     document.getElementById(id)!.addEventListener('input', e => {
