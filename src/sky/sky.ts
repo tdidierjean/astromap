@@ -9,7 +9,7 @@ import {
 } from '../astro';
 import { esc, fmtTime, moonPhaseText } from '../format';
 import { Camera, clamp, altForHorizon, defaultFraming, maxFovForHorizon, HORIZON_MIN_FRAC, FOV_MIN, FOV_MAX, ALT_MIN, ALT_MAX, type View } from './camera';
-import { skyColors, rgb, twilightName, twilightLimit, starColor } from './palette';
+import { skyColors, rgb, twilightName, twilightLimit, starColor, OBSTRUCTION } from './palette';
 
 const D2R = Math.PI / 180;
 const COMPASS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
@@ -642,30 +642,30 @@ export class SkyView {
       const base = bottom(run);
       if (kind === 'building') {
         const t = tops(run, s => s.top, false);
-        fillRun(t, base, 'rgb(14,17,23)');
-        edge(t, 'rgba(120,135,160,0.45)', 1.2);
+        fillRun(t, base, OBSTRUCTION.building.fill);
+        edge(t, OBSTRUCTION.building.edge, 1.2);
       } else if (kind === 'estimated') {
         const t = tops(run, s => s.top, false);
-        fillRun(t, base, 'rgba(34,42,56,0.62)');
-        edge(t, 'rgba(160,175,200,0.7)', 1.3, [6, 5]);
+        fillRun(t, base, OBSTRUCTION.estimated.fill);
+        edge(t, OBSTRUCTION.estimated.edge, 1.3, [6, 5]);
       } else if (kind === 'conifer') {
         const t = tops(run, s => s.top, true);
-        fillRun(t, base, 'rgb(9,20,15)');
-        edge(t, 'rgba(60,110,80,0.55)', 2.2, undefined, 'rgba(40,90,60,0.8)');
+        fillRun(t, base, OBSTRUCTION.conifer.fill);
+        edge(t, OBSTRUCTION.conifer.edge, 2.2, undefined, 'rgba(40,90,60,0.8)');
       } else if (leaf) {
         const t = tops(run, s => s.leafTop, true);
-        fillRun(t, base, 'rgb(11,24,17)');
-        edge(t, 'rgba(70,125,80,0.55)', 2.4, undefined, 'rgba(50,100,60,0.8)');
+        fillRun(t, base, OBSTRUCTION.leaf.fill);
+        edge(t, OBSTRUCTION.leaf.edge, 2.4, undefined, 'rgba(50,100,60,0.8)');
       } else {
         // bare: solid roofline behind, see-through branches above it
         const rb = tops(run, s => s.bareTop, false);
-        fillRun(rb, base, 'rgb(14,17,23)');
-        edge(rb, 'rgba(120,135,160,0.45)', 1.2);
+        fillRun(rb, base, OBSTRUCTION.building.fill);
+        edge(rb, OBSTRUCTION.building.edge, 1.2);
         const crown = tops(run, s => s.leafTop, true);
         const rev = rb.slice().reverse();
         ctx.beginPath(); this.pathPts(crown, true); this.pathPts(rev, false); ctx.closePath();
-        ctx.fillStyle = 'rgba(14,26,18,0.22)'; ctx.fill();
-        edge(crown, 'rgba(110,160,115,0.6)', 1.6, [2, 3]);
+        ctx.fillStyle = OBSTRUCTION.bareCrown.fill; ctx.fill();
+        edge(crown, OBSTRUCTION.bareCrown.edge, 1.6, [2, 3]);
       }
     }
 
@@ -675,7 +675,7 @@ export class SkyView {
       for (let alt = 0; alt <= 90; alt += 3) poly.push([a, alt]);
       for (let alt = 90; alt >= 0; alt -= 3) poly.push([b, alt]);
       ctx.beginPath(); this.pathPts(poly, true); ctx.closePath();
-      ctx.fillStyle = 'rgba(6,8,12,0.78)'; ctx.fill();
+      ctx.fillStyle = OBSTRUCTION.wall.fill; ctx.fill();
     };
     const aLo = prof.azMin, aHi = prof.azMin + profileSpan(prof); // unwrapped, aHi may exceed 360
     band(aLo, aLo + 2.5);
@@ -684,7 +684,7 @@ export class SkyView {
       const line: Array<[number, number]> = [];
       for (let alt = 0; alt <= 90; alt += 3) line.push([az, alt]);
       ctx.beginPath(); this.pathPts(line, true);
-      ctx.strokeStyle = 'rgba(120,135,160,0.4)'; ctx.lineWidth = 1; ctx.stroke();
+      ctx.strokeStyle = OBSTRUCTION.wall.edge; ctx.lineWidth = 1; ctx.stroke();
     };
     wallEdge(aLo + 2.5); wallEdge(aHi - 2.5);
     ctx.restore();

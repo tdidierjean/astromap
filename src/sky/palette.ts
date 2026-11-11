@@ -65,3 +65,14 @@ export function starColor(bv: number): string {
   }
   return rgb(stops[stops.length - 1][1]);
 }
+
+/** Obstruction colours shared by the sky view and the horizon editor: solid fill and edge line per kind.
+ *  `leaf` is a deciduous tree in leaf (kind 'tree'); `wall` the shaded bands beyond the window's limits. */
+export const OBSTRUCTION = {
+  building:  { fill: 'rgb(14,17,23)',     edge: 'rgba(120,135,160,0.45)' },
+  estimated: { fill: 'rgba(34,42,56,0.62)', edge: 'rgba(160,175,200,0.7)' },
+  conifer:   { fill: 'rgb(9,20,15)',      edge: 'rgba(60,110,80,0.55)' },
+  leaf:      { fill: 'rgb(11,24,17)',     edge: 'rgba(70,125,80,0.55)' },
+  bareCrown: { fill: 'rgba(14,26,18,0.22)', edge: 'rgba(110,160,115,0.6)' },
+  wall:      { fill: 'rgba(6,8,12,0.78)', edge: 'rgba(120,135,160,0.4)' },
+} as const;

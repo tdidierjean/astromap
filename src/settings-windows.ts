@@ -6,6 +6,8 @@ import { exportFile } from './transfer-ui';
 import {
   COMPASS16, pointAz, pointIndex, parseDegrees, rangeHint, newSimpleWindow, seedFromProfile, moveWindow,
 } from './windows';
+import { openHorizonEditor } from './horizon-editor';
+import { seedProfile, facingOf, sourceAfterEdit } from './horizon-edit';
 
 let onChange: (id?: string) => void = () => {};
 let onFacing: (id: string) => void = () => {};
@@ -28,6 +30,22 @@ const btn = (text: string, label: string, onClick: () => void, cls = 'settings-b
 /** Persist and refresh pills / sky view / Plan tab. */
 function commit(id?: string): void { saveConfig(); onChange(id); }
 
+/** Open the horizon editor on a window. A simple window is only converted when the user saves; cancelling leaves it as it was. */
+function editHorizon(w: ViewWindow, sel: string): void {
+  const isNew = !w.profile;
+  openHorizonEditor({
+    title: `${w.label} \u00b7 horizon`,
+    initial: w.profile ?? seedProfile(w, config.minAlt),
+    onSave: ({ profile, changed }) => {
+      if (!isNew && !changed) return;
+      w.profile = { ...profile, source: sourceAfterEdit(isNew ? undefined : profile.source) };
+      Object.assign(w, facingOf(w.profile));   // the sky view centres on azCenter
+      commit(w.id); onFacing(w.id);
+    },
+    onClose: () => renderWindowList(w.id, sel),
+  });
+}
+
 function cardFor(w: ViewWindow, i: number): HTMLElement {
   const card = el('div', 'settings-group win-card');
   card.dataset.id = w.id;
@@ -45,6 +63,7 @@ function cardFor(w: ViewWindow, i: number): HTMLElement {
   if (w.profile) {
     const p = w.profile;
     card.append(el('div', 'settings-hint', `Horizon: ${p.source} (${p.azMin}°–${p.azMax}°)`));
+    card.append(btn('Edit horizon', 'Edit horizon', () => editHorizon(w, '.win-edit'), 'settings-btn win-edit'));
     card.append(btn('Reset to simple window', 'Reset to simple window', () => {
       Object.assign(w, seedFromProfile(p));
       w.profile = undefined; w.profileOptOut = true;
@@ -89,6 +108,7 @@ function cardFor(w: ViewWindow, i: number): HTMLElement {
     faces.append(sel, deg, el('span', '', '°'));
     const row = el('div', 'settings-row'); row.append(half, halfVal);
     card.append(faces, row, hint);
+    card.append(btn('Draw horizon', 'Draw horizon', () => editHorizon(w, '.win-edit'), 'settings-btn win-edit'));
 
     // Measured horizon of the demo preset (matched by id) can be brought back after a reset
     const builtin = DEMO_CONFIG.windows.find(d => d.id === w.id && d.profile);
