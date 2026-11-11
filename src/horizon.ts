@@ -1,4 +1,5 @@
 // Horizon profiles and the single visibility rule used throughout the app.
+import { inLeaf } from './leaf';
 import { config, type ViewWindow, type HorizonProfile, type ProfileKind } from './config';
 
 /** Minimum altitude when a profile is present (haze / refraction floor). */
@@ -10,13 +11,12 @@ let leafRef: Date | null = null;
 /** Date of the browsed night; when set it decides the leaf state everywhere (so label and night agree). */
 export function setLeafRefDate(d: Date | null): void { leafRef = d; }
 
-/** Are deciduous trees in leaf? (Auto: ~25 April to ~10 November, by the browsed night's date.) */
+/** Are deciduous trees in leaf? (Auto: by the browsed night's date and the latitude, see leaf.ts; the config may override the dates.) */
 export function leafOn(dateArg: Date): boolean {
   const date = leafRef ?? dateArg;
   if (config.leaf === 'leaf') return true;
   if (config.leaf === 'bare') return false;
-  const md = (date.getUTCMonth() + 1) * 100 + date.getUTCDate();
-  return md >= 425 && md <= 1110;
+  return inLeaf(date.getUTCMonth() + 1, date.getUTCDate(), config.lat, config.leafStart, config.leafEnd);
 }
 
 /** Angular width of the window (azMin -> azMax going clockwise); handles ranges that cross 360 -> 0 (azMin > azMax). */

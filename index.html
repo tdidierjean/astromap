@@ -128,6 +128,7 @@
                 <input id="lon" type="number" step="0.01" min="-180" max="180" class="settings-input">
               </label>
             </div>
+            <div id="coord-label" class="settings-hint"></div>
             <label class="settings-field">
               Time zone
               <select id="tz-select" class="settings-input"></select>
@@ -155,11 +156,27 @@
           <div class="settings-group">
             <div class="settings-label">Deciduous trees</div>
             <select id="leaf-mode" class="settings-input">
-              <option value="auto">Auto (in leaf 25 Apr &ndash; 10 Nov)</option>
+              <option value="auto">Auto (by date)</option>
               <option value="leaf">In leaf</option>
               <option value="bare">Bare</option>
             </select>
             <div class="settings-hint">Leafy trees block the view; bare trees only hide the roofs behind them</div>
+            <div id="leaf-season" class="leaf-season">
+              <div class="settings-row">
+                <span class="leaf-season__lbl">In leaf from</span>
+                <select id="leaf-start-m" class="settings-input" aria-label="Leaf season start month"></select>
+                <select id="leaf-start-d" class="settings-input" aria-label="Leaf season start day"></select>
+              </div>
+              <div class="settings-row">
+                <span class="leaf-season__lbl">until</span>
+                <select id="leaf-end-m" class="settings-input" aria-label="Leaf season end month"></select>
+                <select id="leaf-end-d" class="settings-input" aria-label="Leaf season end day"></select>
+              </div>
+              <div class="settings-row">
+                <button id="leaf-default" class="settings-btn" type="button">Use default</button>
+                <span id="leaf-season-hint" class="settings-hint"></span>
+              </div>
+            </div>
           </div>
 
           <div class="settings-group">
@@ -169,6 +186,21 @@
               <span id="min-alt-val" class="settings-val">10&deg;</span>
             </div>
             <div class="settings-hint">Objects below this altitude are ignored (windows without a measured horizon)</div>
+          </div>
+
+          <div class="settings-group settings-group--wide">
+            <div class="settings-label">Credits</div>
+            <div class="credits">
+              Weather, place search and elevation:
+              <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo.com</a>
+              (data under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>;
+              place data based on <a href="https://www.geonames.org/" target="_blank" rel="noopener">GeoNames</a>;
+              elevation from the <a href="https://doi.org/10.5270/ESA-c5d3d65" target="_blank" rel="noopener">Copernicus DEM</a>, ESA).
+              Star and constellation data from <a href="https://github.com/ofrohn/d3-celestial" target="_blank" rel="noopener">d3-celestial</a>
+              (XHIP / Hipparcos, IAU). Sun, Moon and planet positions by
+              <a href="https://github.com/cosinekitty/astronomy" target="_blank" rel="noopener">Astronomy Engine</a>.
+              <a href="THIRD-PARTY-NOTICES.txt" target="_blank" rel="noopener">Licence notices</a>.
+            </div>
           </div>
 
           <div class="settings-group settings-group--wide">

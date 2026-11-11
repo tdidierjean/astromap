@@ -8,14 +8,16 @@ describe('coordinates', () => {
     expect(round2(-33.8688)).toBe(-33.87);
   });
   test('formatCoords with hemispheres', () => {
-    expect(formatCoords(50.73, 7.13)).toBe('50.73°N 7.13°E');
-    expect(formatCoords(-33.87, -70.5)).toBe('33.87°S 70.50°W');
-    expect(formatCoords(0, 0)).toBe('0.00°N 0.00°E');
+    expect(formatCoords(50.73, 7.13)).toBe('50.73°N, 7.13°E');
+    expect(formatCoords(-33.87, -70.5)).toBe('33.87°S, 70.50°W');
+    expect(formatCoords(-33.87, 151.21)).toBe('33.87°S, 151.21°E');
+    expect(formatCoords(47.61, -122.33)).toBe('47.61°N, 122.33°W');
+    expect(formatCoords(0, 0)).toBe('0.00°N, 0.00°E');
   });
   test('locationLabel: name, else coordinates', () => {
     expect(locationLabel({ name: 'Bonn', lat: 1, lon: 2 })).toBe('Bonn');
-    expect(locationLabel({ name: '  ', lat: 50.74, lon: 7.12 })).toBe('50.74°N 7.12°E');
-    expect(locationLabel({ lat: 50.74, lon: 7.12 })).toBe('50.74°N 7.12°E');
+    expect(locationLabel({ name: '  ', lat: 50.74, lon: 7.12 })).toBe('50.74°N, 7.12°E');
+    expect(locationLabel({ lat: 50.74, lon: 7.12 })).toBe('50.74°N, 7.12°E');
   });
   test('range validation', () => {
     expect(parseLat('50.5')).toBe(50.5);

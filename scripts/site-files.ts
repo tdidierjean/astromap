@@ -5,6 +5,7 @@
 export const SITE_FILES: string[] = [
   'index.html',
   'manifest.webmanifest',
+  'THIRD-PARTY-NOTICES.txt',
   'dist/main.js',
   'src/style.css',
   'icons/apple-touch-icon.png',

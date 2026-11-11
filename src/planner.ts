@@ -1,7 +1,8 @@
 // Planner UI: visibility cards, Gantt timeline, az/alt panorama, night navigation, settings.
 import * as Astronomy from 'astronomy-engine';
 import { config, saveConfig, deviceTz, demoMode, isValidTz, type LeafMode, type ClockMode } from './config';
-import { locationLabel } from './location';
+import { locationLabel, formatCoords } from './location';
+import { parseMonthDay, defaultLeafSeason, defaultSeasonText, NORTH_LEAF, SOUTH_LEAF } from './leaf';
 import { leafOn, sampleProfile } from './horizon';
 import { esc, fmtTime, fmtHourTick, nightLabel, moonPhaseText, nextLocalHour } from './format';
 import { findVisSpans, type ObjectData, type Night } from './astro';
@@ -443,6 +444,39 @@ export function setupNightNav(refresh: () => void): void {
 /** Header label: place name (set as text, so it needs no escaping) or coordinates. */
 export function updateLocationLabel(): void {
   document.getElementById('location-label')!.textContent = locationLabel(config);
+  document.getElementById('coord-label')!.textContent = formatCoords(config.lat, config.lon);
+  syncLeafUI();
+}
+
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** Effective "MM-DD" start/end: the override, else the latitude's default (north or south dates in the tropics). */
+function leafDates(): { start: string; end: string } {
+  const d = defaultLeafSeason(config.lat) ?? (config.lat < 0 ? SOUTH_LEAF : NORTH_LEAF);
+  return {
+    start: parseMonthDay(config.leafStart) !== null ? config.leafStart! : d.start,
+    end: parseMonthDay(config.leafEnd) !== null ? config.leafEnd! : d.end,
+  };
+}
+
+/** Leaf-season controls: only shown for mode Auto; month/day selects show the effective dates. */
+function syncLeafUI(): void {
+  const box = document.getElementById('leaf-season');
+  if (!box) return;
+  box.classList.toggle('hidden', config.leaf !== 'auto');
+  const fill = (mId: string, dId: string, md: string) => {
+    const m = document.getElementById(mId) as HTMLSelectElement, d = document.getElementById(dId) as HTMLSelectElement;
+    if (!m.options.length) MONTH_NAMES.forEach((n, i) => m.add(new Option(n, String(i + 1))));
+    if (!d.options.length) for (let i = 1; i <= 31; i++) d.add(new Option(String(i), String(i)));
+    m.value = String(Number(md.slice(0, 2))); d.value = String(Number(md.slice(3)));
+  };
+  const { start, end } = leafDates();
+  fill('leaf-start-m', 'leaf-start-d', start);
+  fill('leaf-end-m', 'leaf-end-d', end);
+  const custom = config.leafStart !== undefined || config.leafEnd !== undefined;
+  (document.getElementById('leaf-default') as HTMLButtonElement).disabled = !custom;
+  document.getElementById('leaf-season-hint')!.textContent =
+    `${custom ? 'Custom dates. ' : ''}Default for ${formatCoords(config.lat, config.lon)}: ${defaultSeasonText(config.lat)}`;
 }
 
 export function syncUI(): void {
@@ -453,6 +487,7 @@ export function syncUI(): void {
   set('loc-name', config.name);
   updateLocationLabel();
   set('leaf-mode', config.leaf);
+  syncLeafUI();
   syncTzUI();
   set('clock-mode', config.clock);
   document.getElementById('min-alt-val')!.textContent = `${config.minAlt}\u00b0`;
@@ -527,7 +562,19 @@ export function setupSettings(refresh: () => void, recentre: (id: string) => voi
 
   document.getElementById('leaf-mode')!.addEventListener('change', e => {
     config.leaf = (e.target as HTMLSelectElement).value as LeafMode;
-    saveConfig(); refresh();
+    saveConfig(); syncLeafUI(); refresh();
+  });
+  const setLeaf = () => {
+    const v = (id: string) => (document.getElementById(id) as HTMLSelectElement).value.padStart(2, '0');
+    const start = `${v('leaf-start-m')}-${v('leaf-start-d')}`, end = `${v('leaf-end-m')}-${v('leaf-end-d')}`;
+    if (parseMonthDay(start) === null || parseMonthDay(end) === null) { syncLeafUI(); return; } // e.g. 31 Apr
+    config.leafStart = start; config.leafEnd = end;
+    saveConfig(); syncLeafUI(); refresh();
+  };
+  for (const id of ['leaf-start-m', 'leaf-start-d', 'leaf-end-m', 'leaf-end-d']) document.getElementById(id)!.addEventListener('change', setLeaf);
+  document.getElementById('leaf-default')!.addEventListener('click', () => {
+    delete config.leafStart; delete config.leafEnd;
+    saveConfig(); syncLeafUI(); refresh();
   });
   const setTz = (tz: string) => {
     if (!isValidTz(tz)) { syncTzUI(); return; }

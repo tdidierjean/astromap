@@ -1,6 +1,7 @@
 // Persistent user configuration (localStorage) and shared type definitions.
 
 import { DEMO_CONFIG, DEMO_TZ } from './demo';
+import { parseMonthDay } from './leaf';
 
 /** building: always blocks; tree: deciduous (blocks in leaf, `bare` = roofline behind it);
  *  conifer: always blocks; estimated: unmeasured stretch, assumed. */
@@ -64,8 +65,11 @@ export interface Config {
   limitMag: number;
   /** Show the alt/az grid in the sky view. */
   showGrid: boolean;
-  /** Deciduous trees: Auto (in leaf ~25 Apr - 10 Nov), always in leaf, or bare. */
+  /** Deciduous trees: Auto (by date; default season depends on latitude), always in leaf, or bare. */
   leaf: LeafMode;
+  /** Optional override of the Auto leaf season, "MM-DD" (e.g. "04-25"); unset: the latitude's default (see leaf.ts). */
+  leafStart?: string;
+  leafEnd?: string;
 }
 
 /** Neutral starting point (no place, no windows): what a visitor without a saved config begins with, before onboarding
@@ -121,6 +125,9 @@ export function migrateConfig(raw: unknown): Config {
     showGrid: typeof raw.showGrid === 'boolean' ? raw.showGrid : def.showGrid,
     leaf,
   };
+  // Optional leaf-season dates: kept only when valid "MM-DD"; absent in older configs (= latitude default).
+  if (parseMonthDay(raw.leafStart) !== null) cfg.leafStart = raw.leafStart as string;
+  if (parseMonthDay(raw.leafEnd) !== null) cfg.leafEnd = raw.leafEnd as string;
   if (!Array.isArray(raw.windows)) return cfg;
   const used = new Set<string>();
   cfg.windows = [];

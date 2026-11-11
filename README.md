@@ -1,100 +1,104 @@
 # AstroMap
 
-A lightweight, browser-based night sky planner for apartment observers with limited sky access.
+AstroMap is a night sky planner for people who can only see part of the sky, for example from an apartment window or balcony. You tell it where you are and which way your windows face. It then shows when the Moon, Venus, Mercury, Mars, Jupiter and Saturn are visible through those windows tonight, and draws a live star map of what you can see.
 
-Tracks the **Moon, Venus, Mercury, Mars, Jupiter and Saturn**, tells you when each object passes through your visible sky windows during the upcoming night, and shows a live **sky view** of what you can see from each window.
+It is a static web page (a PWA). Everything runs in your browser and your settings stay on your device. The only network calls are optional: a cloud-cover forecast, and place search and elevation lookup during setup, all from [Open-Meteo](https://open-meteo.com/).
 
-## Features
+## Using it
 
-### Sky tab (main screen)
+### First run
 
-- Stereographic star map centred on the selected window (North / South), horizon near the bottom, ground and cardinal labels
-- Moon tracking: an edge chip (phase icon, altitude, compass, arrow) points to the Moon when it is up but off-screen (tap to pan to it); when it is hidden by trees/roofs or outside the window it is drawn as a faint outlined disc; when below the horizon a chip shows its next rise. Default zoom (~100° horizontal fov) is set by `DEFAULT_HFOV` in `src/sky/camera.ts`
-- ~1600 stars down to magnitude 5, sized by magnitude with glow; limiting-magnitude slider (default 4.0, also capped by twilight)
-- Constellation lines (dim), asterisms such as the Big Dipper and Summer Triangle (brighter), constellation and star names
-- Planets and the Moon (with phase shading); sky colour follows the Sun's altitude
-- Area outside the window or below the minimum altitude is dimmed; optional az/alt grid
-- Cloud forecast strip (Open-Meteo, hourly high/mid/low cover) above the scrubber plus cloud cover in the status line; cached, hidden when unavailable. This is the only online feature
-- Time scrubber from sunset to sunrise, night navigation, a **Now** button (auto-advances every 30 s); tapping the Gantt timeline on the Plan tab also sets the sky time
-- Drag to pan, pinch / wheel to zoom (field of view 20-150 degrees), double-tap or the reset button to recentre
-- Tap an object (within about 20 px) for name, magnitude, altitude/azimuth and the time spans it is visible in each window tonight
+On first start a short setup asks for:
+
+1. **Where you are.** Use your device location (rounded to about 1 km), type latitude and longitude, or search for a place name. A place search or device location also fills in elevation (looked up from Open-Meteo) and, for a search, the time zone; typed coordinates use the device time zone and elevation 0. Both can be changed in Settings.
+2. **Your first window.** A name and the direction it faces, plus a rough width. You can skip this and add windows later.
+
+You can also import a settings file from the setup screen.
+
+To look around before setting anything up, open the app with `#demo` at the end of the URL (for example `https://example.github.io/astromap/#demo`), or use "Just look around" in the setup. The demo is a balcony in Bonn-Beuel, Germany, with measured horizons. It lives in memory only: nothing is saved, and your own setup is not touched.
+
+### Sky tab
+
+A star map centred on the selected window. Drag to pan, pinch or scroll to zoom, double-tap to recentre. Parts of the sky outside the window, or hidden behind your horizon, are dimmed. Tap an object for its name, magnitude, position and the times it is visible tonight. A time scrubber covers sunset to sunrise, and "Now" jumps to the current time. A cloud-cover strip shows the forecast when it can be fetched.
 
 ### Plan tab
 
-- Per-object visibility summary — next window start/end time and direction
-- Navigate up to 7 days into the past and 14 days into the future using the night browser in the header
-- Gantt-style timeline from sunset to sunrise showing when each object is observable
-- Altitude curve overlay on the timeline (faint line showing how high each object is)
-- Horizon panorama showing each object's full night arc plotted as azimuth × altitude, with current-position dots for tonight
-- Moon phase display (text description + phase angle)
-- Configurable azimuth viewing windows (e.g. ±45° around North and South)
-- Configurable minimum altitude threshold
-- Runs entirely in the browser — no server, no internet required after build (the cloud forecast is optional and needs a connection)
-- Settings persist in `localStorage`
+For each object: the next time span it is visible in each window, with direction. A timeline from sunset to sunrise shows when each object is observable, and a panorama (azimuth by altitude) shows each object's arc across the night. The night browser in the header moves up to 7 days back and 14 days forward. All times use the location's time zone, not the device's.
 
-## Setup
+### Windows
+
+In **Settings**, windows can be added, renamed, reordered and deleted. A window is one of:
+
+- **Simple**: a direction it faces and a half-width. Anything lower than the minimum altitude setting (default 10 degrees) counts as blocked.
+- **Measured horizon**: the outline of the roofs, walls and trees you actually see, from a left wall to a right wall. Objects are visible only above that outline.
+
+### Horizon editor
+
+"Draw horizon" (or "Edit horizon" on a window that already has one) opens a full-screen panorama (azimuth by altitude) with the brightest stars, planets and the Moon drawn behind it at a time you choose. Set the left and right wall azimuths, tap to add points, drag them to match the outline you see, and mark each segment as building, deciduous tree, conifer or estimated. For a deciduous tree you also set the roofline behind it, which applies when the trees are bare. Lining up a bright star against the edge of a roof is a good way to check the outline. Undo and redo are available.
+
+Deciduous trees follow a leaf season. The default depends on latitude: 25 April to 10 November in the northern hemisphere, 25 October to 10 May in the southern, and always in leaf within 15 degrees of the equator. Climates differ, so Settings lets you set your own start and end dates, or you can force "In leaf" or "Bare".
+
+### Import and export
+
+Settings, "Backup": export your whole setup (place, options and all windows) as a JSON file, or a single window with its horizon from that window's card. On phones that support it the share sheet is used; otherwise the file is downloaded. Import checks the file (value ranges, size, version) before anything is applied. Use it to move to a new phone or to share a horizon.
+
+### Install on a phone
+
+AstroMap is a PWA and works offline once opened (the forecast and place search need a connection).
+
+- **iPhone / iPad (Safari):** Share, then **Add to Home Screen**.
+- **Android (Chrome):** menu, then **Install app**.
+
+## Example: a balcony in Bonn
+
+The app was first built for a balcony in Bonn-Beuel with two windows, north and south, partly blocked by neighbouring buildings and trees. Instead of guessing the obstructions, the horizon was measured from phone photos: the stars in a night photo are plate-solved to find exactly where the camera pointed, and each pixel along the outline of a roof or tree is then converted to azimuth and altitude. The method, its accuracy (about 1 to 2 degrees) and the scripts are described in [tools/horizon/README.md](tools/horizon/README.md). The resulting profiles are the demo (`#demo`).
+
+You do not need any of that to use the app: the horizon editor gets you most of the way by eye.
+
+## Self-hosting
+
+AstroMap is plain static files, so any static host works. For GitHub Pages:
+
+1. Fork the repository on GitHub.
+2. In your fork, go to Settings, Pages, and set Source to **GitHub Actions**.
+3. Push a commit to the `master` branch. If your default branch has another name, change `branches:` in `.github/workflows/deploy.yml`.
+
+The workflow in `.github/workflows/deploy.yml` runs on every push to `master`: it installs Bun, runs `bun install` and `bun run build`, and publishes the `_site/` folder to Pages. It does not run the tests or the type check. The site is then served at `https://<your-user>.github.io/<repo>/`. All paths in the app are relative, so it works under that sub-path. Pages serves HTTPS, which the service worker and the geolocation prompt need.
+
+To host elsewhere, run `bun run build` and upload the contents of `_site/` to any static web server (HTTPS is needed for install, offline use and geolocation).
+
+## Development
 
 Requires [Bun](https://bun.sh).
 
 ```bash
 bun install
-bun run build
+bun test               # unit tests
+bun run typecheck      # tsc --noEmit
+bun run build          # bundles dist/main.js and assembles _site/
+bun run preview        # serves _site/ on http://localhost:8080
+bun run dev            # rebuilds dist/main.js on change
 ```
 
-Then run `bun run preview` and open http://localhost:8080 (serves `_site/`, exactly what gets published). Opening `index.html` directly also works, minus the PWA features.
+### What the build does
 
-For development with auto-rebuild on file changes:
+`bun run build` bundles the app, then copies exactly the files listed in `scripts/site-files.ts` into `_site/` (gitignored), adds `.nojekyll`, and generates `_site/sw.js`. The service worker's precache list and cache version are derived from that same list, so each deploy is picked up automatically and the page reloads once when a new version takes over.
 
-```bash
-bun run dev
-```
-
-### Viewing over SSH
-
-Start a static file server on the remote machine:
-
-```bash
-python3 -m http.server 8080
-```
-
-Then on your local machine, forward the port:
-
-```bash
-ssh -L 8080:localhost:8080 user@server
-```
-
-Open `http://localhost:8080` in your local browser.
-
-## Install on phone
-
-AstroMap is a PWA and works offline once opened.
-
-- **iPhone / iPad (Safari):** open the site, tap Share, then **Add to Home Screen**.
-- **Android (Chrome):** menu, then **Install app** (or Add to Home screen).
+To publish a new file (an icon, a script), add its path to `scripts/site-files.ts`. The build fails if a listed file is missing or if `index.html` or the manifest references a local file that is not listed.
 
 Icons are generated from `icons/*.svg` with `python3 scripts/build_icons.py` (needs Playwright).
 
-## Build and deploy
+## Credits and licences
 
-`bun run build` bundles the app and assembles `_site/` (gitignored), which the GitHub Pages workflow uploads as-is.
-
-- **One list:** the published files are listed once, in `scripts/site-files.ts`. The build copies exactly those files into `_site/`, adds `.nojekyll`, and generates `_site/sw.js` whose precache list and cache-version hash derive from the same list, so each deploy is picked up automatically (the page reloads once when a new version takes over).
-- **Adding a file** (e.g. a new icon or script): add its path to `scripts/site-files.ts`. The build fails if a listed file is missing, or if `index.html` / the manifest references a local file that is not listed. It warns about listed files nothing references.
-- **Preview:** `bun run preview` serves `_site/` on http://localhost:8080.
-
-## Configuration
-
-Click **Settings** at the bottom of the page to adjust:
-
-| Setting | Default | Description |
+| What | Source | Terms |
 |---|---|---|
-| Latitude | 50.74° | Observer latitude |
-| Longitude | 7.12° | Observer longitude (Bonn-Beuel) |
-| North window | ±45° | Half-width of north viewing arc (centre 0°, covers 315°–45°) |
-| South window | ±45° | Half-width of south viewing arc (centre 180°, covers 135°–225°) |
-| Min altitude | 10° | Objects below this elevation are ignored |
+| Sun, Moon and planet positions | [Astronomy Engine](https://github.com/cosinekitty/astronomy) by Don Cross (npm `astronomy-engine`), bundled into the app | MIT, copyright 2019-2025 Don Cross |
+| Stars, constellation lines and names | `src/data/catalog.json`, generated from [d3-celestial](https://github.com/ofrohn/d3-celestial) by Olaf Frohn (`scripts/build-catalog.ts`). Star data is XHIP, an extended Hipparcos compilation (Anderson and Francis 2012, CDS VizieR V/137D); constellations from the IAU | d3-celestial: BSD 3-Clause, copyright 2015 Olaf Frohn. Please acknowledge CDS and the XHIP catalogue |
+| Cloud forecast, place search, elevation | [Open-Meteo](https://open-meteo.com/) free API, called from the browser. Place search uses [GeoNames](https://www.geonames.org/); elevation uses the Copernicus DEM (ESA) | Data CC BY 4.0, with attribution (shown in Settings). The free API is for **non-commercial use** only |
+| Bonn horizon profiles (`src/data/horizon-*.ts`) | Measured by the author | Same terms as the rest of the code |
+| Icons, fonts | Own artwork (`icons/`); no web fonts, the system font stack is used | Same terms as the rest of the code |
 
-Settings are saved automatically in `localStorage`.
+The licence notices required by the bundled code and data are in [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt), which is also published with the app and linked from Settings. AstroMap itself is released under the [MIT licence](LICENSE).
 
 ## How it works
 
@@ -111,7 +115,7 @@ Azimuth convention: 0° = North, 90° = East, 180° = South, 270° = West.
 
 ### Viewing window check
 
-For each configured window (centre azimuth + half-width), the signed angular difference between the object's azimuth and the window centre is computed with wraparound handling:
+Windows without a measured horizon are a centre azimuth plus a half-width. The signed angular difference between the object's azimuth and the window centre is computed with wraparound handling:
 
 ```
 diff = ((az - center + 540) % 360) - 180
@@ -142,11 +146,16 @@ astromap/
 ├── scripts/
 │   ├── build-catalog.ts  # Generates src/data/catalog.json (needs internet)
 │   └── check-astro.ts    # Verifies the fast rotation maths against Horizon()
+├── LICENSE             # MIT
+├── THIRD-PARTY-NOTICES.txt  # Licence notices, published with the app
 ├── src/
 │   ├── main.ts         # Glue: tabs, time model, controls
 │   ├── astro.ts        # Bodies, windows, night spans, fixed-star rotation
 │   ├── catalog.ts      # Typed arrays built from the catalog JSON
-│   ├── config.ts       # Settings + localStorage
+│   ├── config.ts       # Settings, versioned migration, localStorage
+│   ├── leaf.ts         # Leaf season by latitude (pure)
+│   ├── location.ts     # Coordinates, place search, elevation
+│   ├── transfer.ts     # Import / export validation
 │   ├── format.ts       # Time / moon-phase formatting
 │   ├── state.ts        # Shared night offset
 │   ├── weather.ts      # Open-Meteo cloud forecast + cache
@@ -164,10 +173,6 @@ astromap/
 ### Sky view maths
 
 Stars are stored as J2000 unit vectors. Once per frame, the J2000-to-local (east/north/up) rotation matrix is derived from `Astronomy.Rotation_EQJ_HOR` and combined with the camera basis, then applied to every star and line vertex. This matches `Horizon()` to better than 0.0001 degrees (`bun run scripts/check-astro.ts`). Planets and the Moon use `Horizon()` directly. Projection is stereographic (x = 2 tan(theta/2)); the horizon, being a great circle, projects to a circle.
-
-### Star catalog and attribution
-
-`src/data/catalog.json` is generated by `bun run scripts/build-catalog.ts` and committed, so the app needs no network at runtime. Star positions, magnitudes, names, constellation lines and constellation names come from [d3-celestial](https://github.com/ofrohn/d3-celestial) by Olaf Frohn (BSD 3-Clause licence; derived from the Hipparcos catalogue and IAU / Stellarium data). Copyright (c) 2015, Olaf Frohn. Asterism line sets are hand-defined in the script.
 
 ### Type checking
 

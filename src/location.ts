@@ -4,9 +4,9 @@ import { isValidTz } from './config';
 /** Round to the 0.01 degree grid (about 1 km): enough for a sky view, no need to store an exact address. */
 export const round2 = (x: number): number => Math.round(x * 100) / 100;
 
-/** "50.74°N 7.12°E" (S / W for negative values). */
+/** "50.74°N, 7.12°E" (S / W for negative values). The one formatter for every place coordinates are shown. */
 export function formatCoords(lat: number, lon: number): string {
-  return `${Math.abs(lat).toFixed(2)}°${lat < 0 ? 'S' : 'N'} ${Math.abs(lon).toFixed(2)}°${lon < 0 ? 'W' : 'E'}`;
+  return `${Math.abs(lat).toFixed(2)}°${lat < 0 ? 'S' : 'N'}, ${Math.abs(lon).toFixed(2)}°${lon < 0 ? 'W' : 'E'}`;
 }
 
 /** Header label: the place name, or the coordinates when there is none. */

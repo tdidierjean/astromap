@@ -616,3 +616,12 @@ body.hz-open { overflow: hidden; }
 .hz-timetop { justify-content: space-between; flex-wrap: nowrap; }
 .hz-timetext { font-family: monospace; font-size: 0.8rem; }
 .hz-scrub { width: 100%; }
+
+/* Leaf-season override (Settings) */
+.leaf-season { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+.leaf-season__lbl { font-size: 0.8rem; color: var(--muted); min-width: 6.5em; }
+.leaf-season .settings-input { width: auto; }
+
+/* Credits (Settings) */
+.credits { font-size: 0.74rem; color: var(--muted); line-height: 1.5; }
+.credits a { color: var(--accent); }
