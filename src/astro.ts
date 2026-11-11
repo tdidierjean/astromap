@@ -1,4 +1,4 @@
-// Astronomy computations: solar-system bodies, visibility windows, night search,
+// Astronomy computations: solar-system bodies, window check, night search,
 // and the fast J2000 -> horizon rotation used for the star catalogue.
 import * as Astronomy from 'astronomy-engine';
 import { config, type ViewWindow } from './config';
@@ -15,20 +15,11 @@ export interface Sample {
 }
 
 export interface BodyDef {
-  name: string; color: string; dotClass: string; body: Astronomy.Body;
-  /** Too faint to see against a bright sky: visibility is only counted between sunset and sunrise. */
-  needsDarkness: boolean;
+  name: string; color: string; body: Astronomy.Body;
 }
 
 export interface ObjectData extends BodyDef {
   samples: Sample[];
-  /** Visibility windows for the card: = spans of `samples` for objects needing darkness; for the Moon,
-   *  the true windows (not clipped to sunset/sunrise) that overlap the night. */
-  visSpans: VisSpan[];
-  curAz: number;
-  curAlt: number;
-  curVisible: boolean;
-  curWindow?: string;
 }
 
 export interface Night { start: Astronomy.AstroTime; end: Astronomy.AstroTime; }
@@ -36,16 +27,13 @@ export interface VisSpan { start: Date; end: Date; direction: string; }
 
 // ─── Objects ─────────────────────────────────────────────────────────────────
 
-// The Moon is bright enough to see in daylight, so its window must not be clipped to the night boundary.
-// Venus and Mercury stay needsDarkness: true (twilight-only visibility is not treated as a daylight object).
-
 export const OBJECTS: BodyDef[] = [
-  { name: 'Moon',    color: '#e0dfca', dotClass: 'dot-moon',    body: Astronomy.Body.Moon, needsDarkness: false },
-  { name: 'Venus',   color: '#fff3c4', dotClass: 'dot-venus',   body: Astronomy.Body.Venus, needsDarkness: true },
-  { name: 'Mercury', color: '#b9b0a6', dotClass: 'dot-mercury', body: Astronomy.Body.Mercury, needsDarkness: true },
-  { name: 'Mars',    color: '#e06040', dotClass: 'dot-mars',    body: Astronomy.Body.Mars, needsDarkness: true },
-  { name: 'Jupiter', color: '#c8a46e', dotClass: 'dot-jupiter', body: Astronomy.Body.Jupiter, needsDarkness: true },
-  { name: 'Saturn',  color: '#d4c090', dotClass: 'dot-saturn',  body: Astronomy.Body.Saturn, needsDarkness: true },
+  { name: 'Moon',    color: '#e0dfca', body: Astronomy.Body.Moon },
+  { name: 'Venus',   color: '#fff3c4', body: Astronomy.Body.Venus },
+  { name: 'Mercury', color: '#b9b0a6', body: Astronomy.Body.Mercury },
+  { name: 'Mars',    color: '#e06040', body: Astronomy.Body.Mars },
+  { name: 'Jupiter', color: '#c8a46e', body: Astronomy.Body.Jupiter },
+  { name: 'Saturn',  color: '#d4c090', body: Astronomy.Body.Saturn },
 ];
 
 export function observer(): Astronomy.Observer {
@@ -125,35 +113,12 @@ function sampleRange(obj: Astronomy.Body, obs: Astronomy.Observer, fromMs: numbe
   return samples;
 }
 
-const DAYLIGHT_MARGIN_MS = 24 * 3_600_000;
-
-export function computeData(night: Night, refTime: Astronomy.AstroTime): ObjectData[] {
+/** Sample every body through the night. */
+export function computeData(night: Night): ObjectData[] {
   const obs = observer();
   const startMs = night.start.date.getTime();
   const endMs   = night.end.date.getTime();
-
-  const data = OBJECTS.map(obj => {
-    const samples = sampleRange(obj.body, obs, startMs, endMs);
-    // Objects visible in daylight: find the true window over a wider range, but keep only spans that
-    // overlap this night so an occurrence on a neighbouring day does not show up as a bogus extra.
-    const visSpans = obj.needsDarkness
-      ? findVisSpans(samples)
-      : findVisSpans(sampleRange(obj.body, obs, startMs - DAYLIGHT_MARGIN_MS, endMs + DAYLIGHT_MARGIN_MS))
-          .filter(s => s.end.getTime() >= startMs && s.start.getTime() <= endMs);
-    return { ...obj, samples, visSpans, curAz: 0, curAlt: 0, curVisible: false } as ObjectData;
-  });
-  updateCurrent(data, refTime);
-  return data;
-}
-
-/** Recompute the "displayed moment" position of each object in place (cheap; no resampling). */
-export function updateCurrent(data: ObjectData[], refTime: Astronomy.AstroTime): void {
-  const obs = observer();
-  for (const d of data) {
-    const hz = getHorizon(d.body, refTime, obs);
-    const cv = checkWindows(hz.azimuth, hz.altitude, refTime.date);
-    d.curAz = hz.azimuth; d.curAlt = hz.altitude; d.curVisible = cv.visible; d.curWindow = cv.window;
-  }
+  return OBJECTS.map(obj => ({ ...obj, samples: sampleRange(obj.body, obs, startMs, endMs) }));
 }
 
 // ─── Fixed stars (J2000 catalogue) ────────────────────────────────────────────

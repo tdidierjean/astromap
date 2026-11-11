@@ -1,6 +1,6 @@
 # AstroMap
 
-AstroMap is a night sky planner for people who can only see part of the sky, for example from an apartment window or balcony. You tell it where you are and which way your windows face. It then shows when the Moon, Venus, Mercury, Mars, Jupiter and Saturn are visible through those windows tonight, and draws a live star map of what you can see.
+AstroMap is a night sky planner for people who can only see part of the sky, for example from an apartment window or balcony. You tell it where you are and which way your windows face. It then draws a live star map of what you can see, with the Moon, Venus, Mercury, Mars, Jupiter and Saturn marked when they are visible through those windows.
 
 It is a static web page (a PWA). Everything runs in your browser and your settings stay on your device. The only network calls are optional: a cloud-cover forecast, and place search and elevation lookup during setup, all from [Open-Meteo](https://open-meteo.com/).
 
@@ -17,17 +17,13 @@ You can also import a settings file from the setup screen.
 
 To look around before setting anything up, open the app with `#demo` at the end of the URL (for example `https://example.github.io/astromap/#demo`), or use "Just look around" in the setup. The demo is a balcony in Bonn-Beuel, Germany, with measured horizons. It lives in memory only: nothing is saved, and your own setup is not touched.
 
-### Sky tab
+### Sky view
 
-A star map centred on the selected window. Drag to pan, pinch or scroll to zoom, double-tap to recentre. Parts of the sky outside the window, or hidden behind your horizon, are dimmed. Tap an object for its name, magnitude, position and the times it is visible tonight. A time scrubber covers sunset to sunrise, and "Now" jumps to the current time. A cloud-cover strip shows the forecast when it can be fetched.
-
-### Plan tab
-
-For each object: the next time span it is visible in each window, with direction. A timeline from sunset to sunrise shows when each object is observable, and a panorama (azimuth by altitude) shows each object's arc across the night. The night browser in the header moves up to 7 days back and 14 days forward. All times use the location's time zone, not the device's.
+A star map centred on the selected window. Drag to pan, pinch or scroll to zoom, double-tap to recentre. Parts of the sky outside the window, or hidden behind your horizon, are dimmed. Tap an object for its name, magnitude, position and the times it is visible tonight. A time scrubber covers sunset to sunrise, and "Now" jumps to the current time. A cloud-cover strip above the scrubber shows the total cloud-cover forecast when it can be fetched, and the status line gives the figure for the selected time. The night browser in the header moves up to 7 days back and 14 days forward. All times use the location's time zone, not the device's. The gear button in the header opens Settings.
 
 ### Windows
 
-In **Settings**, windows can be added, renamed, reordered and deleted. A window is one of:
+In **Settings** (the gear in the header), windows can be added, renamed, reordered and deleted. A window is one of:
 
 - **Simple**: a direction it faces and a half-width. Anything lower than the minimum altitude setting (default 10 degrees) counts as blocked.
 - **Measured horizon**: the outline of the roofs, walls and trees you actually see, from a left wall to a right wall. Objects are visible only above that outline.
@@ -107,7 +103,7 @@ The licence notices required by the bundled code and data are in [THIRD-PARTY-NO
 All calculations use the [`astronomy-engine`](https://github.com/cosinekitty/astronomy) library (Don Cross), which runs entirely in the browser. For each object, the app:
 
 1. Finds tonight's sunset and sunrise using `SearchRiseSet`
-2. Samples the object's position every 15 minutes between sunset and sunrise
+2. Samples the object's position every 15 minutes between sunset and sunrise (the sky view dims the stretches that fall outside your windows)
 3. At each sample, converts equatorial coordinates (RA/Dec) to horizontal coordinates (azimuth/altitude) via `Horizon()`
 4. Checks whether the azimuth falls within one of the configured viewing windows **and** the altitude is above the minimum threshold
 
@@ -124,32 +120,18 @@ visible = |diff| <= halfWidth  AND  altitude >= minAlt
 
 The north window (centre 0°) correctly handles the 0°/360° boundary.
 
-### Timeline
-
-Rendered on a `<canvas>` element. Each row represents one tracked object. Segments are colour-coded:
-
-- **Solid colour** — object is within a viewing window and above the minimum altitude
-- **Very faint colour** — object is above the horizon but outside all viewing windows
-- **Dark/empty** — object is below the horizon
-
-A red dashed "now" line shows the current time (tonight's view only).
-
-### Horizon panorama
-
-A second canvas below the timeline plots each object's position spatially: azimuth (0°–360°, N→E→S→W→N) on the X-axis and altitude (0°–90°) on the Y-axis. Configured viewing windows are shaded as vertical bands. A red dashed line marks the minimum altitude threshold. For tonight's view, a filled dot with the object name shows each object's current position on its arc.
-
 ## Project structure
 
 ```
 astromap/
-├── index.html          # Page shell: Sky / Plan tabs
+├── index.html          # Page shell: sky view and the Settings sheet
 ├── scripts/
 │   ├── build-catalog.ts  # Generates src/data/catalog.json (needs internet)
 │   └── check-astro.ts    # Verifies the fast rotation maths against Horizon()
 ├── LICENSE             # MIT
 ├── THIRD-PARTY-NOTICES.txt  # Licence notices, published with the app
 ├── src/
-│   ├── main.ts         # Glue: tabs, time model, controls
+│   ├── main.ts         # Glue: time model, controls, night navigation, cloud strip
 │   ├── astro.ts        # Bodies, windows, night spans, fixed-star rotation
 │   ├── catalog.ts      # Typed arrays built from the catalog JSON
 │   ├── config.ts       # Settings, versioned migration, localStorage
@@ -159,7 +141,7 @@ astromap/
 │   ├── format.ts       # Time / moon-phase formatting
 │   ├── state.ts        # Shared night offset
 │   ├── weather.ts      # Open-Meteo cloud forecast + cache
-│   ├── planner.ts      # Plan tab: cards, timeline, panorama, settings
+│   ├── settings.ts     # Settings sheet: location, clock, leaf season, backup
 │   ├── sky/
 │   │   ├── sky.ts      # SkyView: rendering and interaction
 │   │   ├── camera.ts   # Stereographic projection

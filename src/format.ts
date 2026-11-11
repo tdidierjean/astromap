@@ -55,12 +55,6 @@ export function addLocalDays(ms: number, days: number, tz: string = config.tz): 
   return localToMs(p.y, p.m, p.d + days, p.h, p.mi, tz);
 }
 
-/** First full local hour strictly after `ms`. */
-export function nextLocalHour(ms: number, tz: string = config.tz): number {
-  const p = localParts(ms, tz);
-  return localToMs(p.y, p.m, p.d, p.h + 1, 0, tz);
-}
-
 // ─── Formatting ─────────────────────────────────────────────────────────────
 
 const clockOpts = (): Intl.DateTimeFormatOptions =>
@@ -90,11 +84,6 @@ export function fmtTime(d: Date): string {
   return dtf({ hour: is12h() ? 'numeric' : '2-digit', minute: '2-digit', ...clockOpts() }).format(d);
 }
 
-/** Compact label for an hour tick: "20:00", or "8 PM" with AM/PM. */
-export function fmtHourTick(d: Date): string {
-  return is12h() ? dtf({ hour: 'numeric', ...clockOpts() }).format(d) : fmtTime(d);
-}
-
 export function fmtClock(d: Date): string {
   return dtf({ hour: is12h() ? 'numeric' : '2-digit', minute: '2-digit', second: '2-digit', ...clockOpts() }).format(d);
 }
@@ -102,12 +91,6 @@ export function fmtClock(d: Date): string {
 export function fmtDateTime(d: Date): string {
   const day = dtf({ weekday: 'short', day: 'numeric', month: 'short' }).format(d);
   return `${day}, ${fmtTime(d)}`;
-}
-
-/** "HH:MM" of an instant in the configured zone (value format of <input type=time>). */
-export function timeInputValue(ms: number): string {
-  const p = localParts(ms);
-  return `${String(p.h).padStart(2, '0')}:${String(p.mi).padStart(2, '0')}`;
 }
 
 export function nightLabel(offset: number): string {

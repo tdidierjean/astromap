@@ -1,5 +1,5 @@
 import { test, expect, describe } from 'bun:test';
-import { localParts, localToMs, addLocalDays, nextLocalHour, tzOffsetMs } from './format';
+import { localParts, localToMs, addLocalDays, tzOffsetMs } from './format';
 
 const H = 3_600_000;
 const iso = (ms: number) => new Date(ms).toISOString();
@@ -74,19 +74,13 @@ describe('localToMs', () => {
   });
 });
 
-describe('addLocalDays / nextLocalHour', () => {
+describe('addLocalDays / tzOffsetMs', () => {
   test('calendar days across DST are 23/25 h long', () => {
     const a = localToMs(2026, 3, 28, 20, 0, 'Europe/Berlin');
     expect(addLocalDays(a, 1, 'Europe/Berlin') - a).toBe(23 * H);
     const b = localToMs(2026, 10, 24, 20, 0, 'Europe/Berlin');
     expect(addLocalDays(b, 1, 'Europe/Berlin') - b).toBe(25 * H);
     expect(addLocalDays(b, -1, 'Europe/Berlin')).toBe(localToMs(2026, 10, 23, 20, 0, 'Europe/Berlin'));
-  });
-  test('next full local hour', () => {
-    const t = Date.UTC(2026, 0, 15, 12, 10); // 17:40 in Kolkata
-    expect(iso(nextLocalHour(t, 'Asia/Kolkata'))).toBe('2026-01-15T12:30:00.000Z'); // 18:00 local
-    expect(iso(nextLocalHour(t, 'UTC'))).toBe('2026-01-15T13:00:00.000Z');
-    expect(nextLocalHour(Date.UTC(2026, 0, 15, 13, 0), 'UTC')).toBe(Date.UTC(2026, 0, 15, 14, 0));
   });
   test('offsets', () => {
     expect(tzOffsetMs(Date.UTC(2026, 0, 15), 'Asia/Kolkata')).toBe(5.5 * H);

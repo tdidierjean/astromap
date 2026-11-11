@@ -35,12 +35,8 @@
         <div class="night-nav__sub"><span id="night-info">loading&hellip;</span></div>
       </div>
     </div>
+    <button id="settings-open" class="gear" type="button" title="Settings" aria-label="Settings" aria-expanded="false">&#9881;</button>
   </header>
-
-  <nav class="tabs" role="tablist">
-    <button class="tab active" data-tab="sky" role="tab">Sky</button>
-    <button class="tab" data-tab="plan" role="tab">Plan</button>
-  </nav>
 
   <section id="view-sky" class="view view--sky">
     <div id="sky-stage" class="sky-stage">
@@ -70,7 +66,7 @@
         <button id="btn-now" class="now-btn">Now</button>
       </div>
       <div id="cloud-strip" class="cloud-strip hidden">
-        <div class="cloud-strip__cap"><span>☁ high · mid · low</span><span id="cloud-note"></span></div>
+        <div class="cloud-strip__cap"><span>☁ cloud cover</span><span id="cloud-note"></span></div>
         <canvas id="cloud-canvas"></canvas>
       </div>
       <input id="scrub" class="scrub" type="range" min="0" max="600" step="1" value="0" aria-label="Time of night">
@@ -78,152 +74,124 @@
     </div>
   </section>
 
-  <section id="view-plan" class="view hidden">
-  <main class="main">
-    <div class="plan-time">
-      <label for="time-picker">Time shown</label>
-      <input id="time-picker" type="time" class="time-picker">
-      <button id="time-now" class="nav-btn time-now-btn" title="Jump to live now">Now</button>
+  <div id="settings" class="sheet hidden" role="dialog" aria-modal="true" aria-label="Settings">
+    <div class="sheet__bar">
+      <h2 class="sheet__title">Settings</h2>
+      <button id="settings-close" class="sheet__done" type="button">Done</button>
     </div>
-    <div id="cards" class="cards"></div>
+    <div class="sheet__body">
+      <div class="settings-grid">
 
-    <section class="timeline-section">
-      <h2 class="section-title" id="timeline-title">Tonight's Visibility Timeline</h2>
-      <p class="hint">Tap the timeline to set the time shown in the Sky view (blue marker).</p>
-      <div class="timeline-wrap">
-        <canvas id="timeline" class="timeline"></canvas>
-      </div>
-      <div class="legend">
-        <span class="legend__item"><span class="legend__swatch legend__swatch--visible"></span>In viewing window</span>
-        <span class="legend__item"><span class="legend__swatch legend__swatch--above"></span>Above horizon, blocked</span>
-        <span class="legend__item"><span class="legend__swatch legend__swatch--below"></span>Below horizon</span>
-      </div>
-    </section>
-
-    <section class="timeline-section">
-      <h2 class="section-title">Sky Position</h2>
-      <div class="timeline-wrap">
-        <canvas id="panorama" class="panorama"></canvas>
-      </div>
-    </section>
-
-    <section class="settings-section">
-      <button id="settings-toggle" class="settings-toggle">&#9881; Settings</button>
-      <div id="settings-panel" class="settings-panel hidden">
-        <div class="settings-grid">
-
-          <div class="settings-group">
-            <div class="settings-label">Location</div>
+        <div class="settings-group">
+          <div class="settings-label">Location</div>
+          <label class="settings-field">
+            Name
+            <input id="loc-name" type="text" class="settings-input settings-input--grow" maxlength="80" placeholder="optional" autocomplete="off">
+          </label>
+          <div class="settings-row">
             <label class="settings-field">
-              Name
-              <input id="loc-name" type="text" class="settings-input settings-input--grow" maxlength="80" placeholder="optional" autocomplete="off">
+              Lat&deg;
+              <input id="lat" type="number" step="0.01" min="-90" max="90" class="settings-input">
             </label>
-            <div class="settings-row">
-              <label class="settings-field">
-                Lat&deg;
-                <input id="lat" type="number" step="0.01" min="-90" max="90" class="settings-input">
-              </label>
-              <label class="settings-field">
-                Lon&deg;
-                <input id="lon" type="number" step="0.01" min="-180" max="180" class="settings-input">
-              </label>
-            </div>
-            <div id="coord-label" class="settings-hint"></div>
             <label class="settings-field">
-              Time zone
-              <select id="tz-select" class="settings-input"></select>
-              <input id="tz-text" type="text" class="settings-input hidden" placeholder="Europe/Berlin" autocomplete="off">
+              Lon&deg;
+              <input id="lon" type="number" step="0.01" min="-180" max="180" class="settings-input">
             </label>
-            <button id="tz-device" class="settings-btn" type="button">Use this device's zone</button>
           </div>
-
-          <div class="settings-group">
-            <div class="settings-label">Clock</div>
-            <select id="clock-mode" class="settings-input">
-              <option value="auto">Auto (browser locale)</option>
-              <option value="24">24-hour</option>
-              <option value="12">12-hour</option>
-            </select>
-            <div class="settings-hint">All times use the location's time zone, whatever the device says</div>
-          </div>
-
-          <div class="settings-group settings-group--wide">
-            <div class="settings-label">Windows</div>
-            <div id="win-list" class="win-list"></div>
-            <button id="win-add" class="settings-btn win-add" type="button">+ Add window</button>
-          </div>
-
-          <div class="settings-group">
-            <div class="settings-label">Deciduous trees</div>
-            <select id="leaf-mode" class="settings-input">
-              <option value="auto">Auto (by date)</option>
-              <option value="leaf">In leaf</option>
-              <option value="bare">Bare</option>
-            </select>
-            <div class="settings-hint">Leafy trees block the view; bare trees only hide the roofs behind them</div>
-            <div id="leaf-season" class="leaf-season">
-              <div class="settings-row">
-                <span class="leaf-season__lbl">In leaf from</span>
-                <select id="leaf-start-m" class="settings-input" aria-label="Leaf season start month"></select>
-                <select id="leaf-start-d" class="settings-input" aria-label="Leaf season start day"></select>
-              </div>
-              <div class="settings-row">
-                <span class="leaf-season__lbl">until</span>
-                <select id="leaf-end-m" class="settings-input" aria-label="Leaf season end month"></select>
-                <select id="leaf-end-d" class="settings-input" aria-label="Leaf season end day"></select>
-              </div>
-              <div class="settings-row">
-                <button id="leaf-default" class="settings-btn" type="button">Use default</button>
-                <span id="leaf-season-hint" class="settings-hint"></span>
-              </div>
-            </div>
-          </div>
-
-          <div class="settings-group">
-            <div class="settings-label">Min altitude</div>
-            <div class="settings-row">
-              <input id="min-alt" type="range" min="0" max="45" step="5" class="settings-range">
-              <span id="min-alt-val" class="settings-val">10&deg;</span>
-            </div>
-            <div class="settings-hint">Objects below this altitude are ignored (windows without a measured horizon)</div>
-          </div>
-
-          <div class="settings-group settings-group--wide">
-            <div class="settings-label">Credits</div>
-            <div class="credits">
-              Weather, place search and elevation:
-              <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo.com</a>
-              (data under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>;
-              place data based on <a href="https://www.geonames.org/" target="_blank" rel="noopener">GeoNames</a>;
-              elevation from the <a href="https://doi.org/10.5270/ESA-c5d3d65" target="_blank" rel="noopener">Copernicus DEM</a>, ESA).
-              Star and constellation data from <a href="https://github.com/ofrohn/d3-celestial" target="_blank" rel="noopener">d3-celestial</a>
-              (XHIP / Hipparcos, IAU). Sun, Moon and planet positions by
-              <a href="https://github.com/cosinekitty/astronomy" target="_blank" rel="noopener">Astronomy Engine</a>.
-              <a href="THIRD-PARTY-NOTICES.txt" target="_blank" rel="noopener">Licence notices</a>.
-            </div>
-          </div>
-
-          <div class="settings-group settings-group--wide">
-            <div class="settings-label">Backup</div>
-            <div class="settings-row">
-              <button id="export-config" class="settings-btn" type="button">Export settings</button>
-              <button id="import-btn" class="settings-btn" type="button">Import&hellip;</button>
-              <input id="import-file" type="file" accept=".json,application/json" class="hidden">
-            </div>
-            <div id="transfer-msg" class="settings-hint" role="status"></div>
-            <div class="settings-hint">A file with your place and all windows, or a single window. Use it to move to a new phone or share a horizon.</div>
-          </div>
-
-          <div class="settings-group settings-group--wide" id="demo-link-group">
-            <div class="settings-label">About</div>
-            <div class="settings-hint">Curious how it looks with a measured horizon? <a href="#demo" id="demo-link" class="settings-link">Try the demo</a> (Bonn-Beuel balcony; your saved setup is not touched)</div>
-          </div>
-
+          <div id="coord-label" class="settings-hint"></div>
+          <label class="settings-field">
+            Time zone
+            <select id="tz-select" class="settings-input"></select>
+            <input id="tz-text" type="text" class="settings-input hidden" placeholder="Europe/Berlin" autocomplete="off">
+          </label>
+          <button id="tz-device" class="settings-btn" type="button">Use this device's zone</button>
         </div>
+
+        <div class="settings-group">
+          <div class="settings-label">Clock</div>
+          <select id="clock-mode" class="settings-input">
+            <option value="auto">Auto (browser locale)</option>
+            <option value="24">24-hour</option>
+            <option value="12">12-hour</option>
+          </select>
+          <div class="settings-hint">All times use the location's time zone, whatever the device says</div>
+        </div>
+
+        <div class="settings-group settings-group--wide">
+          <div class="settings-label">Windows</div>
+          <div id="win-list" class="win-list"></div>
+          <button id="win-add" class="settings-btn win-add" type="button">+ Add window</button>
+        </div>
+
+        <div class="settings-group">
+          <div class="settings-label">Deciduous trees</div>
+          <select id="leaf-mode" class="settings-input">
+            <option value="auto">Auto (by date)</option>
+            <option value="leaf">In leaf</option>
+            <option value="bare">Bare</option>
+          </select>
+          <div class="settings-hint">Leafy trees block the view; bare trees only hide the roofs behind them</div>
+          <div id="leaf-season" class="leaf-season">
+            <div class="settings-row">
+              <span class="leaf-season__lbl">In leaf from</span>
+              <select id="leaf-start-m" class="settings-input" aria-label="Leaf season start month"></select>
+              <select id="leaf-start-d" class="settings-input" aria-label="Leaf season start day"></select>
+            </div>
+            <div class="settings-row">
+              <span class="leaf-season__lbl">until</span>
+              <select id="leaf-end-m" class="settings-input" aria-label="Leaf season end month"></select>
+              <select id="leaf-end-d" class="settings-input" aria-label="Leaf season end day"></select>
+            </div>
+            <div class="settings-row">
+              <button id="leaf-default" class="settings-btn" type="button">Use default</button>
+              <span id="leaf-season-hint" class="settings-hint"></span>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-group">
+          <div class="settings-label">Min altitude</div>
+          <div class="settings-row">
+            <input id="min-alt" type="range" min="0" max="45" step="5" class="settings-range">
+            <span id="min-alt-val" class="settings-val">10&deg;</span>
+          </div>
+          <div class="settings-hint">Objects below this altitude are ignored (windows without a measured horizon)</div>
+        </div>
+
+        <div class="settings-group settings-group--wide">
+          <div class="settings-label">Credits</div>
+          <div class="credits">
+            Weather, place search and elevation:
+            <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo.com</a>
+            (data under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>;
+            place data based on <a href="https://www.geonames.org/" target="_blank" rel="noopener">GeoNames</a>;
+            elevation from the <a href="https://doi.org/10.5270/ESA-c5d3d65" target="_blank" rel="noopener">Copernicus DEM</a>, ESA).
+            Star and constellation data from <a href="https://github.com/ofrohn/d3-celestial" target="_blank" rel="noopener">d3-celestial</a>
+            (XHIP / Hipparcos, IAU). Sun, Moon and planet positions by
+            <a href="https://github.com/cosinekitty/astronomy" target="_blank" rel="noopener">Astronomy Engine</a>.
+            <a href="THIRD-PARTY-NOTICES.txt" target="_blank" rel="noopener">Licence notices</a>.
+          </div>
+        </div>
+
+        <div class="settings-group settings-group--wide">
+          <div class="settings-label">Backup</div>
+          <div class="settings-row">
+            <button id="export-config" class="settings-btn" type="button">Export settings</button>
+            <button id="import-btn" class="settings-btn" type="button">Import&hellip;</button>
+            <input id="import-file" type="file" accept=".json,application/json" class="hidden">
+          </div>
+          <div id="transfer-msg" class="settings-hint" role="status"></div>
+          <div class="settings-hint">A file with your place and all windows, or a single window. Use it to move to a new phone or share a horizon.</div>
+        </div>
+
+        <div class="settings-group settings-group--wide" id="demo-link-group">
+          <div class="settings-label">About</div>
+          <div class="settings-hint">Curious how it looks with a measured horizon? <a href="#demo" id="demo-link" class="settings-link">Try the demo</a> (Bonn-Beuel balcony; your saved setup is not touched)</div>
+        </div>
+
       </div>
-    </section>
-  </main>
-  </section>
+    </div>
+  </div>
 
   <script src="dist/main.js"></script>
 </body>

@@ -27,7 +27,7 @@ const btn = (text: string, label: string, onClick: () => void, cls = 'settings-b
   return b;
 };
 
-/** Persist and refresh pills / sky view / Plan tab. */
+/** Persist and refresh pills and the sky view. */
 function commit(id?: string): void { saveConfig(); onChange(id); }
 
 /** Open the horizon editor on a window. A simple window is only converted when the user saves; cancelling leaves it as it was. */
@@ -161,7 +161,7 @@ export function addImportedWindow(w: ViewWindow): void {
   card?.querySelector<HTMLInputElement>('.win-card__name')?.focus({ preventScroll: true });
 }
 
-/** @param refresh  re-render pills, sky view and Plan tab
+/** @param refresh  re-render pills and the sky view
  *  @param recentre called with a window id after its facing changed (the sky view re-centres if it shows it)
  *  @param status   shows a message in the Backup group */
 export function setupWindowList(refresh: () => void, recentre: (id: string) => void, status: (text: string, err?: boolean) => void): void {
